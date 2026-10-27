@@ -37,6 +37,10 @@
     .attendance-list { max-height:280px; overflow-y:auto; overscroll-behavior:contain; border:1px solid var(--border); border-radius:9px; padding:0 10px; }
     .attendance-list .recent-row:first-child { border-top:0; }
     .attendance-search { margin:12px 0 8px; }
+    .head-count-options { display:grid; grid-template-columns:repeat(6, minmax(0, 1fr)); gap:8px; margin:8px 0 12px; }
+    .count-button { background:#e8edf3; color:var(--navy); border:2px solid transparent; padding:12px 6px; min-height:48px; }
+    .count-button.selected { background:var(--navy); color:white; border-color:var(--gold); }
+    .count-button:focus-visible { outline:3px solid var(--gold); outline-offset:2px; }
     .muted { color:#647182; font-size:.88rem; }
     @media(max-width:420px) { .member-grid { grid-template-columns:1fr; } }
   </style>
@@ -73,8 +77,16 @@
     <div id="message" aria-live="polite"></div>
     <div id="memberCard" style="display:none">
       <div class="member-grid" id="memberFields"></div>
-      <label for="headCount">Head count (including member)</label>
-      <input id="headCount" type="number" min="1" step="1" value="1">
+      <label>Head count (including member)</label>
+      <input id="headCount" type="hidden" value="1">
+      <div class="head-count-options" role="group" aria-label="Head count including member">
+        <button type="button" class="count-button selected" data-count="1" aria-pressed="true" onclick="setHeadCount(1)">1</button>
+        <button type="button" class="count-button" data-count="2" aria-pressed="false" onclick="setHeadCount(2)">2</button>
+        <button type="button" class="count-button" data-count="3" aria-pressed="false" onclick="setHeadCount(3)">3</button>
+        <button type="button" class="count-button" data-count="4" aria-pressed="false" onclick="setHeadCount(4)">4</button>
+        <button type="button" class="count-button" data-count="5" aria-pressed="false" onclick="setHeadCount(5)">5</button>
+        <button type="button" class="count-button" data-count="6" aria-pressed="false" onclick="setHeadCount(6)">6</button>
+      </div>
       <button class="primary" onclick="submitCheckIn()">Confirm check-in</button>
     </div>
   </section>
@@ -178,6 +190,16 @@
     $('memberCard').style.display = m.active ? 'block' : 'none';
   }
 
+  function setHeadCount(count) {
+    const selectedCount = Math.min(6, Math.max(1, parseInt(count, 10) || 1));
+    $('headCount').value = String(selectedCount);
+    document.querySelectorAll('.count-button').forEach(button => {
+      const selected = Number(button.dataset.count) === selectedCount;
+      button.classList.toggle('selected', selected);
+      button.setAttribute('aria-pressed', String(selected));
+    });
+  }
+
   function submitCheckIn() {
     if (!currentMember || !currentMember.active) { showMessage('Look up an active member before checking in.', 'bad'); return; }
     const eventName = $('eventName').value.trim();
@@ -192,7 +214,7 @@
       $('searchResults').innerHTML = '';
       $('memberCard').style.display = 'none';
       currentMember = null;
-      $('headCount').value = '1';
+      setHeadCount(1);
       renderSummary(result.summary);
     }).withFailureHandler(err => showMessage(err.message || String(err), 'bad'))
       .checkIn(currentMember.userId, eventName, count);
