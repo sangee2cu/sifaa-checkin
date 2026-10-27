@@ -7,6 +7,45 @@ function doGet() {
     .addMetaTag('viewport', 'width=device-width, initial-scale=1');
 }
 
+// Event name is the suffix after the final hyphen in the spreadsheet file name.
+function getEventName() {
+  const fileName = SpreadsheetApp.getActiveSpreadsheet().getName();
+  const lastHyphen = fileName.lastIndexOf('-');
+  return (lastHyphen >= 0 ? fileName.substring(lastHyphen + 1) : fileName).trim();
+}
+
+// Search by first and/or last name. Returns only the matching member records.
+function searchMembers(firstName, lastName) {
+  firstName = String(firstName || '').trim().toLowerCase();
+  lastName = String(lastName || '').trim().toLowerCase();
+  if (!firstName && !lastName) throw new Error('Enter a first name, last name, or both.');
+
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(MEMBERS_SHEET);
+  if (!sheet) throw new Error('Could not find a sheet named "' + MEMBERS_SHEET + '".');
+  const values = sheet.getDataRange().getValues();
+  if (values.length < 2) return [];
+  const headers = values[0].map(v => String(v).trim().toLowerCase());
+  const idCol = findHeader(headers, ['user id', 'userid', 'member id']);
+  const firstCol = findHeader(headers, ['first name', 'firstname']);
+  const lastCol = findHeader(headers, ['last name', 'lastname']);
+  if (idCol < 0 || firstCol < 0 || lastCol < 0) {
+    throw new Error('Members sheet needs User ID, First name, and Last name columns.');
+  }
+
+  const matches = [];
+  for (let i = 1; i < values.length; i++) {
+    const first = String(values[i][firstCol] || '').trim();
+    const last = String(values[i][lastCol] || '').trim();
+    if ((!firstName || first.toLowerCase().includes(firstName)) &&
+        (!lastName || last.toLowerCase().includes(lastName))) {
+      const member = getMember(String(values[i][idCol]).trim());
+      if (member) matches.push(member);
+      if (matches.length >= 50) break;
+    }
+  }
+  return matches;
+}
+
 function getMember(userId) {
   userId = String(userId || '').trim();
   if (!userId) throw new Error('Enter or scan a member User ID.');
@@ -68,14 +107,13 @@ function findHeader(headers, choices) {
   return -1;
 }
 
-function checkIn(userId, eventName, headCount, volunteer) {
+function checkIn(userId, eventName, headCount) {
   const member = getMember(userId);
   if (!member) throw new Error('No member found for User ID: ' + userId);
   if (!member.active) throw new Error('Membership is inactive or expired. Check-in was not recorded.');
   eventName = String(eventName || '').trim();
   if (!eventName) throw new Error('Enter the event name.');
   const count = Math.max(1, Math.floor(Number(headCount) || 1));
-  volunteer = String(volunteer || '').trim();
 
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   let sheet = ss.getSheetByName(CHECKINS_SHEET);
@@ -92,7 +130,9 @@ function checkIn(userId, eventName, headCount, volunteer) {
     }
   }
 
-  sheet.appendRow([new Date(), eventName, member.userId, member.firstName, member.lastName, count, volunteer, member.membershipStatus]);
+  // Keep the legacy Volunteer column blank when the existing log has it.
+  // New log rows omit collecting or storing any volunteer name.
+  sheet.appendRow([new Date(), eventName, member.userId, member.firstName, member.lastName, count, '', member.membershipStatus]);
   return { success: true, member: member, eventName: eventName, headCount: count, summary: getEventSummary(eventName) };
 }
 
