@@ -5,7 +5,6 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>SIFAA Event Check-in</title>
-  <script src="https://accounts.google.com/gsi/client" async defer></script>
   <style>
     :root { color-scheme: light; --navy:#17324d; --gold:#d5a33a; --bg:#f5f7fa; --border:#d8dee8; }
     * { box-sizing: border-box; }
@@ -58,13 +57,20 @@
 <main>
   <section id="adminPanel" class="card admin-panel hidden">
     <h2 style="font-size:1.1rem;margin:0 0 8px">Administrator setup</h2>
-    <p class="muted">Sign in with an approved Google account to publish the spreadsheet for the next event. Volunteers do not need access to the spreadsheet itself.</p>
-    <div id="adminGoogleButton"></div>
-    <div id="adminStatus" class="muted admin-status" aria-live="polite">Admin sign-in is loading…</div>
+    <p class="muted">Only the SIFAA administrator can publish an event. Volunteers can use the check-in view without signing in.</p>
+    <div id="adminLoginForm">
+      <label for="adminEmailInput">Admin email</label>
+      <input id="adminEmailInput" type="email" value="sangee2cu@gmail.com" autocomplete="username">
+      <label for="adminPasswordInput">Password</label>
+      <input id="adminPasswordInput" type="password" placeholder="Enter admin password" autocomplete="current-password">
+      <button class="primary" type="button" onclick="loginAdmin()">Sign in</button>
+    </div>
+    <div id="adminStatus" class="muted admin-status" aria-live="polite">Sign in to manage the active event.</div>
     <div id="publishForm" class="hidden">
       <label for="sheetUrl">Google Sheets URL for this event</label>
       <input id="sheetUrl" type="url" placeholder="https://docs.google.com/spreadsheets/d/…" autocomplete="off">
       <button class="primary" type="button" onclick="publishSpreadsheet()">Validate and publish event</button>
+      <button class="secondary" type="button" onclick="logoutAdmin()">Sign out</button>
       <p class="muted">The spreadsheet must contain a tab named <strong>Members</strong> with User ID, First name, Last name, and Membership status columns. Check-ins will be saved in SIFAA_Checkins in that spreadsheet.</p>
     </div>
   </section>
@@ -337,56 +343,53 @@
     }).searchMembers(first, last);
   }
 
-  let adminIdToken = '';
+  let adminSessionToken = '';
   let adminEmail = '';
-  let googleClientId = '';
 
   function toggleAdminPanel() {
     $('adminPanel').classList.toggle('hidden');
-    if (!$('adminPanel').classList.contains('hidden')) initializeAdminSignIn();
   }
 
-  function initializeAdminSignIn() {
-    if (googleClientId) {
-      if (!window.google || !google.accounts || !google.accounts.id) {
-        $('adminStatus').textContent = 'Google sign-in is still loading. Please wait a moment.';
-        return;
-      }
-      if (!$('adminGoogleButton').dataset.initialized) {
-        google.accounts.id.initialize({
-          client_id: googleClientId,
-          callback: response => {
-            adminIdToken = response.credential || '';
-            $('adminStatus').textContent = 'Verifying Google account…';
-            google.script.run.withSuccessHandler(result => {
-              adminEmail = result.email;
-              $('adminStatus').textContent = 'Signed in as ' + adminEmail + '. You can publish an event spreadsheet.';
-              $('publishForm').classList.remove('hidden');
-            }).withFailureHandler(err => {
-              adminIdToken = '';
-              adminEmail = '';
-              $('publishForm').classList.add('hidden');
-              $('adminStatus').textContent = err.message || String(err);
-            }).verifyAdmin(adminIdToken);
-          }
-        });
-        google.accounts.id.renderButton($('adminGoogleButton'), {
-          theme: 'outline', size: 'large', text: 'signin_with', shape: 'rectangular'
-        });
-        $('adminGoogleButton').dataset.initialized = 'true';
-      }
-      $('adminStatus').textContent = adminEmail
-        ? 'Signed in as ' + adminEmail + '.'
-        : 'Sign in with your approved Google account.';
-    } else {
-      $('adminStatus').textContent = 'Admin sign-in needs one-time setup: create a Google OAuth 2.0 Web client ID and save it as the Apps Script property GOOGLE_CLIENT_ID. See the setup instructions in the repository README.';
+  function loginAdmin() {
+    const email = $('adminEmailInput').value.trim();
+    const password = $('adminPasswordInput').value;
+    if (!email || !password) {
+      $('adminStatus').textContent = 'Enter the admin email and password.';
+      return;
     }
+    $('adminStatus').textContent = 'Signing in…';
+    google.script.run.withSuccessHandler(result => {
+      adminSessionToken = result.token;
+      adminEmail = result.email;
+      $('adminPasswordInput').value = '';
+      $('adminLoginForm').classList.add('hidden');
+      $('publishForm').classList.remove('hidden');
+      $('adminStatus').textContent = 'Signed in as ' + adminEmail + '. Admin session expires in 6 hours.';
+    }).withFailureHandler(err => {
+      adminSessionToken = '';
+      adminEmail = '';
+      $('publishForm').classList.add('hidden');
+      $('adminStatus').textContent = err.message || String(err);
+    }).loginAdmin(email, password);
+  }
+
+  function logoutAdmin() {
+    const token = adminSessionToken;
+    adminSessionToken = '';
+    adminEmail = '';
+    $('publishForm').classList.add('hidden');
+    $('adminLoginForm').classList.remove('hidden');
+    $('adminPasswordInput').value = '';
+    $('adminStatus').textContent = 'Signed out.';
+    if (token) google.script.run.logoutAdmin(token);
   }
 
   function publishSpreadsheet() {
     const url = $('sheetUrl').value.trim();
-    if (!adminIdToken || !adminEmail) {
-      $('adminStatus').textContent = 'Please sign in again with your approved Google account.';
+    if (!adminSessionToken || !adminEmail) {
+      $('adminStatus').textContent = 'Please sign in again with the admin email and password.';
+      $('publishForm').classList.add('hidden');
+      $('adminLoginForm').classList.remove('hidden');
       return;
     }
     if (!url) {
@@ -399,13 +402,14 @@
         '. Found ' + result.memberRows + ' member rows. Volunteers can now use the check-in view.';
       loadAppConfig();
     }).withFailureHandler(err => {
-      $('adminStatus').textContent = err.message || String(err);
-    }).publishEventSpreadsheet(url, adminIdToken);
+      const message = err.message || String(err);
+      $('adminStatus').textContent = message;
+      if (message.toLowerCase().includes('session has expired')) logoutAdmin();
+    }).publishEventSpreadsheet(url, adminSessionToken);
   }
 
   function loadAppConfig() {
     google.script.run.withSuccessHandler(config => {
-      googleClientId = config.googleClientId || '';
       $('eventName').value = config.eventName || '';
       $('volunteerView').classList.toggle('hidden', !config.hasActiveEvent);
       $('noEventNotice').classList.toggle('hidden', Boolean(config.hasActiveEvent));
@@ -418,7 +422,6 @@
         $('attendanceCount').textContent = '0 check-ins';
         $('recent').textContent = 'No event is published yet.';
       }
-      if (!$('adminPanel').classList.contains('hidden')) initializeAdminSignIn();
     }).withFailureHandler(err => {
       $('eventName').value = '';
       showMessage(err.message || String(err), 'bad');
