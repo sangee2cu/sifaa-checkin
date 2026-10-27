@@ -16,13 +16,12 @@ The app also recognizes optional columns `Email`, `Phone`, `Membership level`, a
 ## Apps Script setup
 
 1. Create/open the Apps Script project and add `Code.gs` and `Index.html` from this repository.
-2. In **Project Settings → Script Properties**, add `GOOGLE_CLIENT_ID` with the OAuth 2.0 **Web application** client ID created in Google Cloud Console.
-3. In Google Cloud Console, configure the OAuth consent screen and create a Web application OAuth client. Configure the authorized JavaScript origins required for the deployed Apps Script web app. The client ID is public; do not put a client secret in the app.
-4. The app's admin allowlist is in `Code.gs`: `sangee2cu@gmail.com`. Only this verified Google account can publish a spreadsheet. To change the allowlist, edit `ADMIN_EMAILS`.
-5. Make sure the Apps Script project owner has **Editor** access to each event spreadsheet that will be published.
-6. Deploy as a **Web app** configured to **execute as the deploying user** so volunteer actions use the owner's spreadsheet permissions. Set who can access the app to the narrowest audience that fits the event. Admin changes are separately protected by Google ID-token verification and the email allowlist.
-7. Approve the Apps Script permissions when prompted, including spreadsheet access and external requests used to verify Google sign-in.
-8. Copy the deployed web app URL and share it with approved volunteers. The app opens directly to the volunteer check-in view; use **Admin setup** to publish the next event.
+2. Open `Code.gs` in the Apps Script editor. In `setAdminPassword()`, temporarily replace `REPLACE_WITH_YOUR_STRONG_PASSWORD` with a strong password of at least 12 characters. Run `setAdminPassword` once from the editor and approve the requested permissions. Then restore the placeholder string and save the project. Do not commit your real password to GitHub or leave it in the source code. The function stores only a salted hash and salt in Script Properties.
+3. The admin email is fixed in `Code.gs` as `sangee2cu@gmail.com`. No Google OAuth client ID or client secret is required.
+4. Make sure the Apps Script project owner has **Editor** access to each event spreadsheet that will be published.
+5. Deploy as a **Web app** configured to **execute as the deploying user** so volunteer actions use the owner's spreadsheet permissions. Choose the narrowest audience that fits the event. The admin login is independently verified on the server.
+6. Approve the Apps Script permissions when prompted, including spreadsheet access.
+7. Copy the deployed web app URL and share it with approved volunteers. The app opens directly to the volunteer check-in view; use **Admin setup** to sign in and publish the next event.
 
 ## Event workflow
 
@@ -37,7 +36,8 @@ The app also recognizes optional columns `Email`, `Phone`, `Membership level`, a
 
 - Volunteers do not need direct access to the membership spreadsheet because the web app runs with the deploying owner's permissions.
 - Keep the app URL restricted to the intended volunteer audience. Anyone allowed to use the app can search member records and view event attendance; do not deploy it to an unrestricted audience unless that is an intentional decision.
-- Only the administrator email in `ADMIN_EMAILS` can publish or switch the active event.
-- The Google OAuth client ID is not a secret. Never store or expose an OAuth client secret in client-side code.
+- Only `sangee2cu@gmail.com` can sign in as admin and publish or switch the active event.
+- The admin password is not stored in plain text. The server stores a salted SHA-256 hash and uses short-lived server-side sessions. Five failed login attempts trigger a temporary 15-minute lockout.
+- After changing the code in GitHub, copy the updated files into Apps Script, save, and deploy a **new version**. GitHub changes do not automatically update the deployed web app.
 - QR codes should contain only the member's User ID, not email or phone.
 - Test with a copy of the sheet before using the app at a live concert.
