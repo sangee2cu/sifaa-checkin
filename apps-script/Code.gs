@@ -15,23 +15,20 @@ function doGet() {
     .addMetaTag('viewport', 'width=device-width, initial-scale=1');
 }
 
-// Run manually from the Apps Script editor to set or change the admin password.
-// If this project is standalone, use the setup instructions in README instead.
+// One-time setup: in the Apps Script editor, temporarily replace the placeholder below
+// with your own strong password (12+ characters), run this function once, then restore the
+// placeholder and save. Do not put your real password in GitHub or share the project source.
 function setAdminPassword() {
-  const ui = SpreadsheetApp.getUi();
-  const first = ui.prompt('Set SIFAA admin password', 'Enter a strong password (at least 12 characters).', ui.ButtonSet.OK_CANCEL);
-  if (first.getSelectedButton() !== ui.Button.OK) return;
-  const password = first.getResponseText();
-  if (password.length < 12) throw new Error('Password must be at least 12 characters.');
-  const second = ui.prompt('Confirm SIFAA admin password', 'Re-enter the same password.', ui.ButtonSet.OK_CANCEL);
-  if (second.getSelectedButton() !== ui.Button.OK) return;
-  if (password !== second.getResponseText()) throw new Error('Passwords did not match. Run setAdminPassword again.');
+  const password = 'REPLACE_WITH_YOUR_STRONG_PASSWORD';
+  if (password === 'REPLACE_WITH_YOUR_STRONG_PASSWORD' || password.length < 12) {
+    throw new Error('Edit setAdminPassword in the Apps Script editor with a strong password of at least 12 characters, then run it once.');
+  }
   const salt = Utilities.getUuid() + Utilities.getUuid();
   PropertiesService.getScriptProperties().setProperties({
     [PROP_ADMIN_PASSWORD_SALT]: salt,
     [PROP_ADMIN_PASSWORD_HASH]: passwordDigest_(salt, password)
   }, false);
-  ui.alert('Admin password saved securely. You can now sign in using ' + ADMIN_EMAIL + '.');
+  Logger.log('Admin password hash saved. Restore the placeholder in the function and save the project.');
 }
 
 function passwordDigest_(salt, password) {
@@ -99,7 +96,6 @@ function publishEventSpreadsheet(sheetUrl, sessionToken) {
   const urlParts = url.split('/spreadsheets/d/');
   const spreadsheetId = urlParts.length > 1 ? urlParts[1].split('/')[0].split('?')[0] : '';
   if (!spreadsheetId) throw new Error('Paste a valid Google Sheets URL.');
-  const spreadsheetId = match[1];
   let ss;
   try {
     ss = SpreadsheetApp.openById(spreadsheetId);
