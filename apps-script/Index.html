@@ -327,6 +327,22 @@
     }).getEventName();
   }
 
+  // Press Enter to run the relevant lookup/search without clicking a button.
+  $('userId').addEventListener('keydown', event => {
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      lookupMember();
+    }
+  });
+  ['searchFirstName', 'searchLastName'].forEach(id => {
+    $(id).addEventListener('keydown', event => {
+      if (event.key === 'Enter') {
+        event.preventDefault();
+        searchByName();
+      }
+    });
+  });
+
   $('eventName').addEventListener('change', refreshSummary);
   $('attendanceSearch').addEventListener('input', renderAttendanceList);
   window.addEventListener('load', loadEventName);
