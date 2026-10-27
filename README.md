@@ -1,30 +1,43 @@
-# SIFAA QR Check-in
+# SIFAA Event Check-in
 
-A mobile-friendly check-in web app for SIFAA events. Member QR codes contain only the member's User ID. Volunteers scan the code, confirm membership status, and record attendance/head count.
+A mobile-friendly web app with a permanent volunteer check-in view and an administrator-only event setup view. The administrator publishes the Google Sheet for the next event; volunteers use the same app URL and do not need direct access to the source spreadsheet.
 
-## Google Sheet setup
+## Google Sheet requirements
 
-1. Upload your Excel membership workbook to Google Drive.
-2. Open it with Google Sheets, then choose **File → Save as Google Sheets**.
-3. Name the member-data tab `Members`.
-4. Make sure row 1 contains these headers: `User ID`, `First name`, `Last name`, `Email`, `Phone`, `Membership level`, `Membership status`, `Renewal due`.
-5. Open **Extensions → Apps Script** from the Google Sheets file.
+The selected spreadsheet must contain a tab named `Members` with a header row containing at least:
 
-## Add the app files
+- `User ID`
+- `First name`
+- `Last name`
+- `Membership status`
 
-Create `Code.gs` and `Index.html` in Apps Script and paste in the application code. The app reads member records from `Members` and writes attendance records to `SIFAA_Checkins`, including event name, member ID, member name, head count, timestamp, and membership status. The event name is automatically derived from the spreadsheet file name after the final hyphen. For example, `2026-10-27 Members South Indian Fine Arts Academy-Flute Jayant` produces `Flute Jayant`. Members can be found by QR/User ID or by first and last name. The app does not ask for a volunteer name.
+The app also recognizes optional columns `Email`, `Phone`, `Membership level`, and `Renewal due`. Event name is derived from the spreadsheet file name after the final hyphen. Check-ins are stored in a `SIFAA_Checkins` tab in the selected spreadsheet, which the app creates if it does not exist.
 
-## Deploy
+## Apps Script setup
 
-1. In Apps Script, select **Deploy → New deployment**.
-2. Choose **Web app**.
-3. Configure access for the intended SIFAA volunteers only, following your organization's Google Workspace/security requirements.
-4. Deploy and open the web app URL on a phone.
-5. Test with a copy of the membership sheet and a test event before using it at a live concert.
+1. Create/open the Apps Script project and add `Code.gs` and `Index.html) from this repository.
+2. In **Project Settings → Script Properties**, add `GOOGLE_CLIENT_ID` with the OAuth 2.0 **Web application** client ID created in Google Cloud Console.
+3. In Google Cloud Console, configure the OAuth consent screen and create a Web application OAuth client. Configure the authorized JavaScript origins required for the deployed Apps Script web app. The client ID is public; do not put a client secret in the app.
+4. The app's admin allowlist is in `Code.gs`: `sangee2cu@gmail.com`. Only this verified Google account can publish a spreadsheet. To change the allowlist, edit `ADMIN_EMAILS`.
+5. Make sure the Apps Script project owner has **Editor** access to each event spreadsheet that will be published.
+6. Deploy as a **Web app** configured to **execute as the deploying user** so volunteer actions use the owner's spreadsheet permissions. Set who can access the app to the narrowest audience that fits the event. Admin changes are separately protected by Google ID-token verification and the email allowlist.
+7. Approve the Apps Script permissions when prompted, including spreadsheet access and external requests used to verify Google sign-in.
+8. Copy the deployed web app URL and share it with approved volunteers. The app opens directly to the volunteer check-in view; use **Admin setup** to publish the next event.
 
-## Notes
+## Event workflow
 
+1. Administrator opens the app and selects **Admin setup**.
+2. Administrator signs in with the approved Google account.
+3. Paste the event spreadsheet URL and choose **Validate and publish event**.
+4. The app validates the `Members` tab, required columns, and creates `SIFAA_Checkins` if needed.
+5. Volunteers open the same app URL. Search by first name/last name or enter a User ID, select a head count from 1–6, and confirm check-in.
+6. Attendance totals and the newest-first check-in list refresh automatically.
+
+## Security notes
+
+- Volunteers do not need direct access to the membership spreadsheet because the web app runs with the deploying owner's permissions.
+- Keep the app URL restricted to the intended volunteer audience. Anyone allowed to use the app can search member records and view event attendance; do not deploy it to an unrestricted audience unless that is an intentional decision.
+- Only the administrator email in `ADMIN_EMAILS` can publish or switch the active event.
+- The Google OAuth client ID is not a secret. Never store or expose an OAuth client secret in client-side code.
 - QR codes should contain only the member's User ID, not email or phone.
-- Membership status and renewal date should be checked before accepting check-in.
-- Attendance records are stored in one `SIFAA_Checkins` tab with an `Event` column so they can be filtered by event. If you specifically need a separate physical tab per event, the script would need that behavior added.
-- Avoid publishing the Google Sheet or deploying the web app to unrestricted public access.
+- Test with a copy of the sheet before using the app at a live concert.
