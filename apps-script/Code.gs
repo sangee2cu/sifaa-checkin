@@ -96,8 +96,9 @@ function getAppConfig() {
 function publishEventSpreadsheet(sheetUrl, sessionToken) {
   const adminEmail = requireAdminSession_(sessionToken);
   const url = String(sheetUrl || '').trim();
-  const match = url.match(/\\/spreadsheets\\/d\\/([a-zA-Z0-9-_]+)/);
-  if (!match) throw new Error('Paste a valid Google Sheets URL.');
+  const urlParts = url.split('/spreadsheets/d/');
+  const spreadsheetId = urlParts.length > 1 ? urlParts[1].split('/')[0].split('?')[0] : '';
+  if (!spreadsheetId) throw new Error('Paste a valid Google Sheets URL.');
   const spreadsheetId = match[1];
   let ss;
   try {
