@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SIFAA Event Check-in</title>
+  <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+  <style>
+    :root { color-scheme: light; --navy:#17324d; --gold:#d5a33a; --bg:#f5f7fa; --border:#d8dee8; }
+    * { box-sizing: border-box; }
+    body { margin:0; font-family:Arial, sans-serif; color:#17212b; background:var(--bg); }
+    header { background:var(--navy); color:white; padding:18px 16px; text-align:center; }
+    header h1 { font-size:1.35rem; margin:0 0 5px; }
+    header p { margin:0; font-size:.92rem; opacity:.9; }
+    main { max-width:620px; margin:18px auto; padding:0 14px 28px; }
+    .card { background:white; border:1px solid var(--border); border-radius:14px; padding:16px; margin-bottom:14px; box-shadow:0 2px 8px #1020300a; }
+    label { display:block; font-size:.9rem; font-weight:700; margin:12px 0 6px; }
+    input, select { width:100%; padding:12px; font-size:1rem; border:1px solid #b8c3d1; border-radius:8px; background:white; }
+    button { border:0; border-radius:9px; padding:12px 15px; font-size:1rem; font-weight:700; cursor:pointer; }
+    .primary { background:var(--navy); color:white; width:100%; margin-top:12px; }
+    .secondary { background:#e8edf3; color:var(--navy); width:100%; margin-top:8px; }
+    #reader { width:100%; overflow:hidden; }
+    .status { border-radius:9px; padding:12px; margin-top:12px; font-weight:700; }
+    .ok { background:#e4f6e9; color:#176534; }
+    .bad { background:#fff0ed; color:#a12b1c; }
+    .info { background:#eaf2fc; color:#174b82; }
+    .member-grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:12px; }
+    .field { background:#f5f7fa; padding:10px; border-radius:8px; min-width:0; overflow-wrap:anywhere; }
+    .field small { display:block; color:#5c6876; margin-bottom:4px; }
+    .field strong { font-size:.98rem; }
+    .stats { display:flex; gap:10px; }
+    .stat { flex:1; background:#f5f7fa; border-radius:10px; padding:12px; text-align:center; }
+    .stat strong { display:block; font-size:1.5rem; color:var(--navy); }
+    .stat span { font-size:.82rem; color:#536170; }
+    .recent-row { border-top:1px solid var(--border); padding:9px 0; font-size:.9rem; display:flex; justify-content:space-between; gap:10px; }
+    .muted { color:#647182; font-size:.88rem; }
+    @media(max-width:420px) { .member-grid { grid-template-columns:1fr; } }
+  </style>
+</head>
+<body>
+<header>
+  <h1>SIFAA Event Check-in</h1>
+  <p>Scan the member QR code or enter their User ID</p>
+</header>
+<main>
+  <section class="card">
+    <label for="eventName">Event name</label>
+    <input id="eventName" placeholder="e.g., Mandolin U. Rajesh Concert" required>
+    <label for="volunteer">Volunteer name (optional)</label>
+    <input id="volunteer" placeholder="Your name">
+  </section>
+
+  <section class="card">
+    <div id="reader"></div>
+    <button class="primary" id="startScan" onclick="startScanner()">Start QR scanner</button>
+    <button class="secondary" id="stopScan" onclick="stopScanner()" style="display:none">Stop scanner</button>
+    <label for="userId">Member User ID</label>
+    <input id="userId" placeholder="Scan or enter User ID" autocomplete="off">
+    <button class="primary" onclick="lookupMember()">Look up member</button>
+    <div id="message" aria-live="polite"></div>
+    <div id="memberCard" style="display:none">
+      <div class="member-grid" id="memberFields"></div>
+      <label for="headCount">Head count (including member)</label>
+      <input id="headCount" type="number" min="1" step="1" value="1">
+      <button class="primary" onclick="submitCheckIn()">Confirm check-in</button>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2 style="font-size:1.1rem;margin:0 0 12px">Event attendance</h2>
+    <div class="stats">
+      <div class="stat"><strong id="checkIns">0</strong><span>Check-ins</span></div>
+      <div class="stat"><strong id="people">0</strong><span>People counted</span></div>
+    </div>
+    <div id="recent" style="margin-top:12px"><p class="muted">Enter an event name to view its attendance.</p></div>
+    <button class="secondary" onclick="refreshSummary()">Refresh attendance</button>
+  </section>
+  <p class="muted">Use only with the authorized SIFAA membership sheet and share access with approved volunteers.</p>
+</main>
+<script>
+  let scanner = null;
+  let currentMember = null;
+  const $ = id => document.getElementById(id);
+
+  function showMessage(text, type) {
+    $('message').className = 'status ' + (type || 'info');
+    $('message').textContent = text;
+    $('message').style.display = 'block';
+  }
+
+  function startScanner() {
+    if (!window.Html5Qrcode) {
+      showMessage('QR scanner library did not load. You can enter the User ID manually.', 'bad');
+      return;
+    }
+    if (!scanner) scanner = new Html5Qrcode('reader');
+    $('startScan').style.display = 'none';
+    $('stopScan').style.display = 'block';
+    scanner.start({ facingMode: 'environment' }, { fps: 10, qrbox: { width: 230, height: 230 } },
+      decodedText => {
+        $('userId').value = decodedText.trim();
+        stopScanner();
+        lookupMember();
+      },
+      () => {}
+    ).catch(err => {
+      $('startScan').style.display = 'block';
+      $('stopScan').style.display = 'none';
+      showMessage('Unable to start camera. Check browser camera permission or enter the User ID manually.', 'bad');
+    });
+  }
+
+  function stopScanner() {
+    if (scanner && scanner.isScanning) {
+      scanner.stop().then(() => {
+        $('startScan').style.display = 'block';
+        $('stopScan').style.display = 'none';
+      }).catch(() => {
+        $('startScan').style.display = 'block';
+        $('stopScan').style.display = 'none';
+      });
+    } else {
+      $('startScan').style.display = 'block';
+      $('stopScan').style.display = 'none';
+    }
+  }
+
+  function lookupMember() {
+    const id = $('userId').value.trim();
+    if (!id) { showMessage('Scan or enter a member User ID first.', 'bad'); return; }
+    $('memberCard').style.display = 'none';
+    showMessage('Looking up member…', 'info');
+    google.script.run.withSuccessHandler(member => {
+      if (!member) {
+        currentMember = null;
+        showMessage('No member found for User ID: ' + id, 'bad');
+        return;
+      }
+      currentMember = member;
+      renderMember(member);
+      showMessage(member.statusMessage, member.active ? 'ok' : 'bad');
+      refreshSummary();
+    }).withFailureHandler(err => showMessage(err.message || String(err), 'bad')).getMember(id);
+  }
+
+  function renderMember(m) {
+    const fields = [
+      ['Name', [m.firstName, m.lastName].filter(Boolean).join(' ') || '—'],
+      ['User ID', m.userId || '—'],
+      ['Membership', m.membershipLevel || '—'],
+      ['Status', m.membershipStatus || 'Unknown'],
+      ['Renewal due', m.renewalDue || '—']
+    ];
+    $('memberFields').innerHTML = '';
+    fields.forEach(([label, value]) => {
+      const box = document.createElement('div');
+      box.className = 'field';
+      const small = document.createElement('small'); small.textContent = label;
+      const strong = document.createElement('strong'); strong.textContent = value;
+      box.append(small, strong);
+      $('memberFields').appendChild(box);
+    });
+    $('memberCard').style.display = m.active ? 'block' : 'none';
+  }
+
+  function submitCheckIn() {
+    if (!currentMember || !currentMember.active) { showMessage('Look up an active member before checking in.', 'bad'); return; }
+    const eventName = $('eventName').value.trim();
+    if (!eventName) { showMessage('Enter the event name first.', 'bad'); return; }
+    const count = Math.max(1, parseInt($('headCount').value, 10) || 1);
+    showMessage('Recording check-in…', 'info');
+    google.script.run.withSuccessHandler(result => {
+      showMessage('Check-in recorded for ' + [result.member.firstName, result.member.lastName].filter(Boolean).join(' ') + '.', 'ok');
+      $('userId').value = '';
+      $('memberCard').style.display = 'none';
+      currentMember = null;
+      $('headCount').value = '1';
+      renderSummary(result.summary);
+    }).withFailureHandler(err => showMessage(err.message || String(err), 'bad'))
+      .checkIn(currentMember.userId, eventName, count, $('volunteer').value.trim());
+  }
+
+  function refreshSummary() {
+    const eventName = $('eventName').value.trim();
+    if (!eventName) return;
+    google.script.run.withSuccessHandler(renderSummary)
+      .withFailureHandler(err => { $('recent').textContent = err.message || String(err); })
+      .getEventSummary(eventName);
+  }
+
+  function renderSummary(summary) {
+    $('checkIns').textContent = summary.checkIns || 0;
+    $('people').textContent = summary.people || 0;
+    $('recent').innerHTML = '';
+    if (!summary.recent || !summary.recent.length) {
+      const p = document.createElement('p'); p.className = 'muted'; p.textContent = 'No check-ins recorded for this event yet.';
+      $('recent').appendChild(p); return;
+    }
+    summary.recent.forEach(item => {
+      const row = document.createElement('div'); row.className = 'recent-row';
+      const left = document.createElement('span'); left.textContent = (item.name || item.userId) + ' · ' + item.timestamp;
+      const right = document.createElement('strong'); right.textContent = item.headCount + (item.headCount === 1 ? ' person' : ' people');
+      row.append(left, right); $('recent').appendChild(row);
+    });
+  }
+
+  $('eventName').addEventListener('change', refreshSummary);
+</script>
+</body>
+</html>
