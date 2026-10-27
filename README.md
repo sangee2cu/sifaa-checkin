@@ -15,7 +15,7 @@ The app also recognizes optional columns `Email`, `Phone`, `Membership level`, a
 
 ## Apps Script setup
 
-1. Create/open the Apps Script project and add `Code.gs` and `Index.html) from this repository.
+1. Create/open the Apps Script project and add `Code.gs` and `Index.html` from this repository.
 2. In **Project Settings → Script Properties**, add `GOOGLE_CLIENT_ID` with the OAuth 2.0 **Web application** client ID created in Google Cloud Console.
 3. In Google Cloud Console, configure the OAuth consent screen and create a Web application OAuth client. Configure the authorized JavaScript origins required for the deployed Apps Script web app. The client ID is public; do not put a client secret in the app.
 4. The app's admin allowlist is in `Code.gs`: `sangee2cu@gmail.com`. Only this verified Google account can publish a spreadsheet. To change the allowlist, edit `ADMIN_EMAILS`.
