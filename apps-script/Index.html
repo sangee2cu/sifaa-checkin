@@ -41,14 +41,13 @@
 <body>
 <header>
   <h1>SIFAA Event Check-in</h1>
-  <p>Scan the member QR code or enter their User ID</p>
+  <p>Scan a member QR code or search by name</p>
 </header>
 <main>
   <section class="card">
-    <label for="eventName">Event name</label>
-    <input id="eventName" placeholder="e.g., Mandolin U. Rajesh Concert" required>
-    <label for="volunteer">Volunteer name (optional)</label>
-    <input id="volunteer" placeholder="Your name">
+    <label for="eventName">Event name (from Google Sheet name)</label>
+    <input id="eventName" readonly aria-readonly="true" value="Loading event name…">
+    <p class="muted">The event name is taken from the spreadsheet file name after the final hyphen.</p>
   </section>
 
   <section class="card">
@@ -57,7 +56,17 @@
     <button class="secondary" id="stopScan" onclick="stopScanner()" style="display:none">Stop scanner</button>
     <label for="userId">Member User ID</label>
     <input id="userId" placeholder="Scan or enter User ID" autocomplete="off">
-    <button class="primary" onclick="lookupMember()">Look up member</button>
+    <button class="primary" onclick="lookupMember()">Look up by User ID</button>
+
+    <div style="border-top:1px solid var(--border);margin-top:18px;padding-top:6px">
+      <h2 style="font-size:1.05rem;margin:8px 0">Search by member name</h2>
+      <label for="searchFirstName">First name</label>
+      <input id="searchFirstName" placeholder="Enter first name" autocomplete="off">
+      <label for="searchLastName">Last name</label>
+      <input id="searchLastName" placeholder="Enter last name" autocomplete="off">
+      <button class="secondary" onclick="searchByName()">Search by name</button>
+      <div id="searchResults" aria-live="polite"></div>
+    </div>
     <div id="message" aria-live="polite"></div>
     <div id="memberCard" style="display:none">
       <div class="member-grid" id="memberFields"></div>
@@ -178,7 +187,7 @@
       $('headCount').value = '1';
       renderSummary(result.summary);
     }).withFailureHandler(err => showMessage(err.message || String(err), 'bad'))
-      .checkIn(currentMember.userId, eventName, count, $('volunteer').value.trim());
+      .checkIn(currentMember.userId, eventName, count);
   }
 
   function refreshSummary() {
@@ -205,7 +214,66 @@
     });
   }
 
+  function searchByName() {
+    const first = $('searchFirstName').value.trim();
+    const last = $('searchLastName').value.trim();
+    if (!first && !last) {
+      $('searchResults').textContent = 'Enter a first name, last name, or both.';
+      return;
+    }
+    $('searchResults').textContent = 'Searching…';
+    google.script.run.withSuccessHandler(members => {
+      const results = $('searchResults');
+      results.innerHTML = '';
+      if (!members.length) {
+        results.textContent = 'No matching members found.';
+        return;
+      }
+      members.forEach(member => {
+        const item = document.createElement('div');
+        item.className = 'recent-row';
+        const info = document.createElement('span');
+        info.textContent = [member.firstName, member.lastName].filter(Boolean).join(' ') +
+          ' · ' + member.membershipStatus + ' · ID: ' + member.userId;
+        const choose = document.createElement('button');
+        choose.className = 'secondary';
+        choose.style.width = 'auto';
+        choose.style.marginTop = '0';
+        choose.textContent = 'Select';
+        choose.onclick = () => {
+          $('userId').value = member.userId;
+          currentMember = member;
+          renderMember(member);
+          showMessage(member.statusMessage, member.active ? 'ok' : 'bad');
+          refreshSummary();
+          $('memberCard').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        };
+        item.append(info, choose);
+        results.appendChild(item);
+      });
+      if (members.length === 50) {
+        const note = document.createElement('p');
+        note.className = 'muted';
+        note.textContent = 'Showing the first 50 matches. Add more letters to narrow the search.';
+        results.appendChild(note);
+      }
+    }).withFailureHandler(err => {
+      $('searchResults').textContent = err.message || String(err);
+    }).searchMembers(first, last);
+  }
+
+  function loadEventName() {
+    google.script.run.withSuccessHandler(name => {
+      $('eventName').value = name || '';
+      refreshSummary();
+    }).withFailureHandler(err => {
+      $('eventName').value = '';
+      showMessage('Could not read the event name from the spreadsheet: ' + (err.message || String(err)), 'bad');
+    }).getEventName();
+  }
+
   $('eventName').addEventListener('change', refreshSummary);
+  window.addEventListener('load', loadEventName);
 </script>
 </body>
 </html>
