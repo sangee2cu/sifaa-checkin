@@ -12,7 +12,7 @@ A mobile-friendly check-in web app for SIFAA events. Member QR codes contain onl
 
 ## Add the app files
 
-Create `Code.gs` and `Index.html` in Apps Script and paste in the application code. The app should read member records from `Members` and write attendance records to `SIFAA_Checkins`, including the event name, member ID, member name, head count, timestamp, volunteer, and membership status.
+Create `Code.gs` and `Index.html` in Apps Script and paste in the application code. The app reads member records from `Members` and writes attendance records to `SIFAA_Checkins`, including event name, member ID, member name, head count, timestamp, and membership status. The event name is automatically derived from the spreadsheet file name after the final hyphen. For example, `2026-10-27 Members South Indian Fine Arts Academy-Flute Jayant` produces `Flute Jayant`. Members can be found by QR/User ID or by first and last name. The app does not ask for a volunteer name.
 
 ## Deploy
 
