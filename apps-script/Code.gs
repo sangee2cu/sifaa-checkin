@@ -1,9 +1,13 @@
 const MEMBERS_SHEET = 'Members';
 const CHECKINS_SHEET = 'SIFAA_Checkins';
-const ADMIN_EMAILS = ['sangee2cu@gmail.com'];
+const ADMIN_EMAIL = 'sangee2cu@gmail.com';
 const PROP_ACTIVE_SHEET_ID = 'SIFAA_ACTIVE_SPREADSHEET_ID';
 const PROP_ACTIVE_SHEET_NAME = 'SIFAA_ACTIVE_SPREADSHEET_NAME';
-const PROP_GOOGLE_CLIENT_ID = 'GOOGLE_CLIENT_ID';
+const PROP_ADMIN_PASSWORD_HASH = 'SIFAA_ADMIN_PASSWORD_HASH';
+const PROP_ADMIN_PASSWORD_SALT = 'SIFAA_ADMIN_PASSWORD_SALT';
+const SESSION_TTL_SECONDS = 21600;
+const LOGIN_FAILURE_LIMIT = 5;
+const LOGIN_LOCK_SECONDS = 900;
 
 function doGet() {
   return HtmlService.createHtmlOutputFromFile('Index')
@@ -11,13 +15,73 @@ function doGet() {
     .addMetaTag('viewport', 'width=device-width, initial-scale=1');
 }
 
-// The web app must be deployed to execute as its owner so volunteers do not need
-// access to the source spreadsheet. Admin identity is verified with a Google ID token.
+// Run manually from the Apps Script editor to set or change the admin password.
+// If this project is standalone, use the setup instructions in README instead.
+function setAdminPassword() {
+  const ui = SpreadsheetApp.getUi();
+  const first = ui.prompt('Set SIFAA admin password', 'Enter a strong password (at least 12 characters).', ui.ButtonSet.OK_CANCEL);
+  if (first.getSelectedButton() !== ui.Button.OK) return;
+  const password = first.getResponseText();
+  if (password.length < 12) throw new Error('Password must be at least 12 characters.');
+  const second = ui.prompt('Confirm SIFAA admin password', 'Re-enter the same password.', ui.ButtonSet.OK_CANCEL);
+  if (second.getSelectedButton() !== ui.Button.OK) return;
+  if (password !== second.getResponseText()) throw new Error('Passwords did not match. Run setAdminPassword again.');
+  const salt = Utilities.getUuid() + Utilities.getUuid();
+  PropertiesService.getScriptProperties().setProperties({
+    [PROP_ADMIN_PASSWORD_SALT]: salt,
+    [PROP_ADMIN_PASSWORD_HASH]: passwordDigest_(salt, password)
+  }, false);
+  ui.alert('Admin password saved securely. You can now sign in using ' + ADMIN_EMAIL + '.');
+}
+
+function passwordDigest_(salt, password) {
+  const bytes = Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, salt + ':' + password, Utilities.Charset.UTF_8);
+  return Utilities.base64EncodeWebSafe(bytes);
+}
+
+function loginAdmin(email, password) {
+  email = String(email || '').trim().toLowerCase();
+  password = String(password || '');
+  if (email !== ADMIN_EMAIL) throw new Error('Invalid email or password.');
+  const cache = CacheService.getScriptCache();
+  const failureKey = 'SIFAA_LOGIN_FAIL_' + Utilities.base64EncodeWebSafe(
+    Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, email, Utilities.Charset.UTF_8)
+  );
+  const failures = Number(cache.get(failureKey) || 0);
+  if (failures >= LOGIN_FAILURE_LIMIT) throw new Error('Too many failed attempts. Please wait 15 minutes and try again.');
+  const props = PropertiesService.getScriptProperties();
+  const salt = props.getProperty(PROP_ADMIN_PASSWORD_SALT);
+  const expected = props.getProperty(PROP_ADMIN_PASSWORD_HASH);
+  if (!salt || !expected) throw new Error('Admin password has not been configured. Ask the Apps Script owner to set it up.');
+  if (passwordDigest_(salt, password) !== expected) {
+    const nextFailures = failures + 1;
+    cache.put(failureKey, String(nextFailures), LOGIN_LOCK_SECONDS);
+    throw new Error(nextFailures >= LOGIN_FAILURE_LIMIT ? 'Too many failed attempts. Please wait 15 minutes and try again.' : 'Invalid email or password.');
+  }
+  cache.remove(failureKey);
+  const token = Utilities.getUuid() + Utilities.getUuid();
+  cache.put('SIFAA_ADMIN_SESSION_' + token, ADMIN_EMAIL, SESSION_TTL_SECONDS);
+  return { success: true, email: ADMIN_EMAIL, token: token, expiresInSeconds: SESSION_TTL_SECONDS };
+}
+
+function logoutAdmin(sessionToken) {
+  const token = String(sessionToken || '');
+  if (token) CacheService.getScriptCache().remove('SIFAA_ADMIN_SESSION_' + token);
+  return { success: true };
+}
+
+function requireAdminSession_(sessionToken) {
+  const token = String(sessionToken || '');
+  if (!token || CacheService.getScriptCache().get('SIFAA_ADMIN_SESSION_' + token) !== ADMIN_EMAIL) {
+    throw new Error('Your admin session has expired. Please sign in again.');
+  }
+  return ADMIN_EMAIL;
+}
+
 function getAppConfig() {
   const props = PropertiesService.getScriptProperties();
   const sheetId = props.getProperty(PROP_ACTIVE_SHEET_ID) || '';
   const sheetName = props.getProperty(PROP_ACTIVE_SHEET_NAME) || '';
-  const clientId = props.getProperty(PROP_GOOGLE_CLIENT_ID) || '';
   let eventName = '';
   if (sheetId) {
     try {
@@ -26,35 +90,13 @@ function getAppConfig() {
       throw new Error('The configured event spreadsheet cannot be opened. Ask the SIFAA administrator to verify access and republish it.');
     }
   }
-  return { hasActiveEvent: Boolean(sheetId), eventName: eventName, spreadsheetName: sheetName, googleClientId: clientId };
+  return { hasActiveEvent: Boolean(sheetId), eventName: eventName, spreadsheetName: sheetName };
 }
 
-function getAdminEmailFromIdToken_(idToken) {
-  idToken = String(idToken || '').trim();
-  if (!idToken) throw new Error('Sign in with your approved Google account to continue.');
-  const clientId = PropertiesService.getScriptProperties().getProperty(PROP_GOOGLE_CLIENT_ID);
-  if (!clientId) throw new Error('Admin sign-in is not configured yet. Set the GOOGLE_CLIENT_ID script property first.');
-  const response = UrlFetchApp.fetch('https://oauth2.googleapis.com/tokeninfo?id_token=' + encodeURIComponent(idToken), {
-    muteHttpExceptions: true
-  });
-  if (response.getResponseCode() !== 200) throw new Error('Google sign-in could not be verified. Please sign in again.');
-  const claims = JSON.parse(response.getContentText());
-  const email = String(claims.email || '').toLowerCase();
-  if (claims.aud !== clientId || String(claims.email_verified) !== 'true') {
-    throw new Error('Google sign-in verification failed. Please use the approved account.');
-  }
-  if (ADMIN_EMAILS.indexOf(email) < 0) throw new Error('This Google account is not authorized to administer SIFAA check-in.');
-  return email;
-}
-
-function verifyAdmin(idToken) {
-  return { email: getAdminEmailFromIdToken_(idToken) };
-}
-
-function publishEventSpreadsheet(sheetUrl, idToken) {
-  const adminEmail = getAdminEmailFromIdToken_(idToken);
+function publishEventSpreadsheet(sheetUrl, sessionToken) {
+  const adminEmail = requireAdminSession_(sessionToken);
   const url = String(sheetUrl || '').trim();
-  const match = url.match(/\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/);
+  const match = url.match(/\\/spreadsheets\\/d\\/([a-zA-Z0-9-_]+)/);
   if (!match) throw new Error('Paste a valid Google Sheets URL.');
   const spreadsheetId = match[1];
   let ss;
@@ -84,13 +126,7 @@ function publishEventSpreadsheet(sheetUrl, idToken) {
   const props = PropertiesService.getScriptProperties();
   props.setProperty(PROP_ACTIVE_SHEET_ID, spreadsheetId);
   props.setProperty(PROP_ACTIVE_SHEET_NAME, ss.getName());
-  return {
-    success: true,
-    adminEmail: adminEmail,
-    spreadsheetName: ss.getName(),
-    eventName: getEventNameFromSpreadsheet_(ss),
-    memberRows: Math.max(0, values.length - 1)
-  };
+  return { success: true, adminEmail: adminEmail, spreadsheetName: ss.getName(), eventName: getEventNameFromSpreadsheet_(ss), memberRows: Math.max(0, values.length - 1) };
 }
 
 function getConfiguredSpreadsheet_() {
