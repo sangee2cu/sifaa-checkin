@@ -182,6 +182,9 @@
     google.script.run.withSuccessHandler(result => {
       showMessage('Check-in recorded for ' + [result.member.firstName, result.member.lastName].filter(Boolean).join(' ') + '.', 'ok');
       $('userId').value = '';
+      $('searchFirstName').value = '';
+      $('searchLastName').value = '';
+      $('searchResults').innerHTML = '';
       $('memberCard').style.display = 'none';
       currentMember = null;
       $('headCount').value = '1';
