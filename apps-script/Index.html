@@ -58,9 +58,6 @@
   </section>
 
   <section class="card">
-    <div id="reader"></div>
-    <button class="primary" id="startScan" onclick="startScanner()">Start QR scanner</button>
-    <button class="secondary" id="stopScan" onclick="stopScanner()" style="display:none">Stop scanner</button>
     <label for="userId">Member User ID</label>
     <input id="userId" placeholder="Scan or enter User ID" autocomplete="off">
     <button class="primary" onclick="lookupMember()">Look up by User ID</button>
@@ -345,7 +342,10 @@
 
   $('eventName').addEventListener('change', refreshSummary);
   $('attendanceSearch').addEventListener('input', renderAttendanceList);
-  window.addEventListener('load', loadEventName);
+  window.addEventListener('load', () => {
+    loadEventName();
+    $('searchFirstName').focus();
+  });
 </script>
 </body>
 </html>
