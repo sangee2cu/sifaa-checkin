@@ -34,6 +34,9 @@
     .stat strong { display:block; font-size:1.5rem; color:var(--navy); }
     .stat span { font-size:.82rem; color:#536170; }
     .recent-row { border-top:1px solid var(--border); padding:9px 0; font-size:.9rem; display:flex; justify-content:space-between; gap:10px; }
+    .attendance-list { max-height:280px; overflow-y:auto; overscroll-behavior:contain; border:1px solid var(--border); border-radius:9px; padding:0 10px; }
+    .attendance-list .recent-row:first-child { border-top:0; }
+    .attendance-search { margin:12px 0 8px; }
     .muted { color:#647182; font-size:.88rem; }
     @media(max-width:420px) { .member-grid { grid-template-columns:1fr; } }
   </style>
@@ -82,7 +85,10 @@
       <div class="stat"><strong id="checkIns">0</strong><span>Check-ins</span></div>
       <div class="stat"><strong id="people">0</strong><span>People counted</span></div>
     </div>
-    <div id="recent" style="margin-top:12px"><p class="muted">Enter an event name to view its attendance.</p></div>
+    <label for="attendanceSearch">Search checked-in members</label>
+    <input id="attendanceSearch" class="attendance-search" type="search" placeholder="Search by first name, last name, or User ID" autocomplete="off">
+    <div id="attendanceCount" class="muted" aria-live="polite">Loading attendance…</div>
+    <div id="recent" class="attendance-list" style="margin-top:8px"><p class="muted">Enter an event name to view its attendance.</p></div>
     <button class="secondary" onclick="refreshSummary()">Refresh attendance</button>
   </section>
   <p class="muted">Use only with the authorized SIFAA membership sheet and share access with approved volunteers.</p>
@@ -201,19 +207,44 @@
       .getEventSummary(eventName);
   }
 
+  let attendanceItems = [];
+
   function renderSummary(summary) {
     $('checkIns').textContent = summary.checkIns || 0;
     $('people').textContent = summary.people || 0;
-    $('recent').innerHTML = '';
-    if (!summary.recent || !summary.recent.length) {
-      const p = document.createElement('p'); p.className = 'muted'; p.textContent = 'No check-ins recorded for this event yet.';
-      $('recent').appendChild(p); return;
+    attendanceItems = (summary.recent || []).slice();
+    renderAttendanceList();
+  }
+
+  function renderAttendanceList() {
+    const query = $('attendanceSearch').value.trim().toLowerCase();
+    const recent = $('recent');
+    recent.innerHTML = '';
+    const filtered = attendanceItems.filter(item =>
+      String(item.name || '').toLowerCase().includes(query) ||
+      String(item.userId || '').toLowerCase().includes(query)
+    );
+    $('attendanceCount').textContent = query
+      ? 'Showing ' + filtered.length + ' of ' + attendanceItems.length + ' check-ins'
+      : attendanceItems.length + ' check-ins · newest first';
+
+    if (!filtered.length) {
+      const p = document.createElement('p');
+      p.className = 'muted';
+      p.textContent = query ? 'No matching checked-in members found.' : 'No check-ins recorded for this event yet.';
+      recent.appendChild(p);
+      return;
     }
-    summary.recent.forEach(item => {
-      const row = document.createElement('div'); row.className = 'recent-row';
-      const left = document.createElement('span'); left.textContent = (item.name || item.userId) + ' · ' + item.timestamp;
-      const right = document.createElement('strong'); right.textContent = item.headCount + (item.headCount === 1 ? ' person' : ' people');
-      row.append(left, right); $('recent').appendChild(row);
+
+    filtered.forEach(item => {
+      const row = document.createElement('div');
+      row.className = 'recent-row';
+      const left = document.createElement('span');
+      left.textContent = (item.name || item.userId) + ' · ' + item.timestamp;
+      const right = document.createElement('strong');
+      right.textContent = item.headCount + (item.headCount === 1 ? ' person' : ' people');
+      row.append(left, right);
+      recent.appendChild(row);
     });
   }
 
@@ -276,6 +307,7 @@
   }
 
   $('eventName').addEventListener('change', refreshSummary);
+  $('attendanceSearch').addEventListener('input', renderAttendanceList);
   window.addEventListener('load', loadEventName);
 </script>
 </body>
