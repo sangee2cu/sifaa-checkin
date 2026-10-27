@@ -156,5 +156,5 @@ function getEventSummary(eventName) {
     }
   }
   recent.reverse();
-  return { checkIns: checkIns, people: people, recent: recent.slice(0, 10) };
+  return { checkIns: checkIns, people: people, recent: recent };
 }
