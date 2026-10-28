@@ -142,10 +142,14 @@ function getEventName() {
   return getEventNameFromSpreadsheet_(getConfiguredSpreadsheet_());
 }
 
-function searchMembers(firstName, lastName) {
+function searchMembers(userId, firstName, lastName) {
+  userId = String(userId || '').trim();
   firstName = String(firstName || '').trim().toLowerCase();
   lastName = String(lastName || '').trim().toLowerCase();
-  if (!firstName && !lastName) throw new Error('Enter a first name, last name, or both.');
+  if (!userId && !firstName && !lastName) {
+    throw new Error('Enter a member ID, first name, or last name.');
+  }
+
   const sheet = getConfiguredSpreadsheet_().getSheetByName(MEMBERS_SHEET);
   if (!sheet) throw new Error('Could not find a sheet named "' + MEMBERS_SHEET + '".');
   const values = sheet.getDataRange().getValues();
@@ -154,14 +158,19 @@ function searchMembers(firstName, lastName) {
   const idCol = findHeader(headers, ['user id', 'userid', 'member id']);
   const firstCol = findHeader(headers, ['first name', 'firstname']);
   const lastCol = findHeader(headers, ['last name', 'lastname']);
-  if (idCol < 0 || firstCol < 0 || lastCol < 0) throw new Error('Members sheet needs User ID, First name, and Last name columns.');
+  if (idCol < 0 || firstCol < 0 || lastCol < 0) {
+    throw new Error('Members sheet needs User ID, First name, and Last name columns.');
+  }
+
   const matches = [];
   for (let i = 1; i < values.length; i++) {
+    const id = String(values[i][idCol] || '').trim();
     const first = String(values[i][firstCol] || '').trim();
     const last = String(values[i][lastCol] || '').trim();
-    if ((!firstName || first.toLowerCase().includes(firstName)) &&
+    if ((!userId || id === userId) &&
+        (!firstName || first.toLowerCase().includes(firstName)) &&
         (!lastName || last.toLowerCase().includes(lastName))) {
-      const member = getMember(String(values[i][idCol]).trim());
+      const member = getMember(id);
       if (member) matches.push(member);
       if (matches.length >= 50) break;
     }
