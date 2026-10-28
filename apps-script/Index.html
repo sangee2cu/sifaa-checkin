@@ -91,10 +91,9 @@
     <h2 style="font-size:1.1rem;margin:0 0 12px">Check in a member</h2>
     <div class="option-card">
       <h3 style="margin:0 0 6px;font-size:1rem">Option 1: Scan QR code</h3>
-      <p class="muted" style="margin:0 0 8px">Use your device camera to scan the member's QR code. The app will extract the member ID and search automatically.</p>
-      <button id="startScannerButton" class="primary" type="button" onclick="startScanner()">Scan QR code with camera</button>
-      <button id="stopScannerButton" class="secondary hidden" type="button" onclick="stopScanner()">Stop camera</button>
-      <div id="reader" class="hidden" style="margin-top:12px"></div>
+      <p class="muted" style="margin:0 0 8px">Open the standalone HTTPS scanner in a new tab. After scanning, the member ID will be sent back here and searched automatically.</p>
+      <button id="startScannerButton" class="primary" type="button" onclick="openStandaloneScanner()">Open QR scanner</button>
+      <p class="muted" style="margin:8px 0 0">First-time setup: the scanner page must be published with GitHub Pages. If camera access fails, use manual member search below.</p>
     </div>
     <div class="option-divider"><span>OR</span></div>
     <div class="option-card">
@@ -141,9 +140,8 @@
 </main>
 <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 <script>
-  let scanner = null;
-  let scannerStarting = false;
   let currentMember = null;
+  const QR_SCANNER_URL = 'https://sangee2cu.github.io/sifaa-checkin/qr-scanner/';
   const $ = id => document.getElementById(id);
 
   function showMessage(text, type) {
@@ -152,59 +150,26 @@
     $('message').style.display = 'block';
   }
 
-  async function startScanner() {
-    if (scanner || scannerStarting) return;
-    if (!window.Html5Qrcode) {
-      showMessage('The QR scanner could not load. Please use the manual member search.', 'bad');
+  function openStandaloneScanner() {
+    const scannerTab = window.open(QR_SCANNER_URL, '_blank');
+    if (!scannerTab) {
+      showMessage('Your browser blocked the scanner tab. Allow pop-ups for this SIFAA app, then try again, or use manual search.', 'bad');
       return;
     }
-    scannerStarting = true;
-    $('startScannerButton').disabled = true;
-    $('reader').classList.remove('hidden');
-    $('stopScannerButton').classList.remove('hidden');
-    try {
-      scanner = new Html5Qrcode('reader');
-      await scanner.start(
-        { facingMode: 'environment' },
-        { fps: 10, qrbox: { width: 240, height: 240 }, aspectRatio: 1.0 },
-        async decodedText => {
-          const memberId = extractMemberId(decodedText);
-          if (!memberId) {
-            showMessage('Could not find a member ID in that QR code. Try again or search manually.', 'bad');
-            return;
-          }
-          $('userId').value = memberId;
-          await stopScanner();
-          searchMember();
-        },
-        () => {}
-      );
-      showMessage('Camera is ready. Point it at the member QR code.', 'info');
-    } catch (err) {
-      const message = err && err.message ? err.message : String(err);
-      await stopScanner();
-      showMessage('Unable to start the camera. Allow camera access in your browser, or use manual search. ' + message, 'bad');
-    } finally {
-      scannerStarting = false;
-      $('startScannerButton').disabled = false;
-    }
+    showMessage('QR scanner opened in a new tab. Scan the code there; the member ID should return here automatically.', 'info');
   }
 
-  async function stopScanner() {
-    const activeScanner = scanner;
-    scanner = null;
-    if (activeScanner) {
-      try {
-        if (activeScanner.isScanning) await activeScanner.stop();
-      } catch (e) {}
-      try { await activeScanner.clear(); } catch (e) {}
-    }
-    $('reader').classList.add('hidden');
-    $('reader').innerHTML = '';
-    $('stopScannerButton').classList.add('hidden');
-    $('startScannerButton').classList.remove('hidden');
-    $('startScannerButton').disabled = false;
-  }
+  // Accept member IDs only from the standalone scanner hosted on this repository's GitHub Pages site.
+  window.addEventListener('message', event => {
+    if (event.origin !== 'https://sangee2cu.github.io') return;
+    if (!event.data || event.data.type !== 'SIFAA_QR_MEMBER') return;
+    const memberId = String(event.data.memberId || '').trim();
+    if (!memberId || memberId.length > 200) return;
+    $('userId').value = extractMemberId(memberId);
+    $('searchFirstName').value = '';
+    $('searchLastName').value = '';
+    searchMember();
+  });
 
   function extractMemberId(value) {
     const text = String(value || '').trim();
