@@ -90,14 +90,10 @@
   <section class="card">
     <h2 style="font-size:1.1rem;margin:0 0 12px">Check in a member</h2>
     <div class="option-card">
-      <h3 style="margin:0 0 6px;font-size:1rem">Option 1: Scan QR code</h3>
-      <p class="muted" style="margin:0 0 8px">Open the camera scanner in a separate browser tab. The same scanner tab is reused for the event.</p>
-      <button id="startScannerButton" class="primary" type="button" onclick="openScannerTab()">Open QR scanner</button>
-      <p class="muted" style="margin:8px 0 0">After scanning, the member ID is sent back to this page for automatic search when the browser allows it. If needed, return to this tab manually.</p>
+      <button id="startScannerButton" class="primary" type="button" onclick="openScannerTab()">Scan QR code</button>
     </div>
     <div class="option-divider"><span>OR</span></div>
     <div class="option-card">
-      <h3 style="margin:0 0 6px;font-size:1rem">Option 2: Search by name or member ID</h3>
       <label for="userId">Member ID</label>
       <input id="userId" placeholder="Enter member ID" autocomplete="off">
       <label for="searchFirstName">First name</label>
