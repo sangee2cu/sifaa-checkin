@@ -80,25 +80,21 @@
   </div>
   <div id="volunteerView">
   <section class="card">
-    <label for="eventName">Active event</label>
-    <input id="eventName" readonly aria-readonly="true" value="Loading event name…">
-    <p class="muted">The active event is selected by the SIFAA administrator.</p>
+    <h2 id="activeEventTitle" style="font-size:1.25rem;margin:0">Loading active event…</h2>
+    <p class="muted" style="margin-bottom:0">SIFAA event check-in</p>
   </section>
 
   <section class="card">
-    <label for="userId">Member User ID</label>
-    <input id="userId" placeholder="Scan or enter User ID" autocomplete="off">
-    <button class="primary" onclick="lookupMember()">Look up by User ID</button>
-
-    <div style="border-top:1px solid var(--border);margin-top:18px;padding-top:6px">
-      <h2 style="font-size:1.05rem;margin:8px 0">Search by member name</h2>
-      <label for="searchFirstName">First name</label>
-      <input id="searchFirstName" placeholder="Enter first name" autocomplete="off">
-      <label for="searchLastName">Last name</label>
-      <input id="searchLastName" placeholder="Enter last name" autocomplete="off">
-      <button class="secondary" onclick="searchByName()">Search by name</button>
-      <div id="searchResults" aria-live="polite"></div>
-    </div>
+    <h2 style="font-size:1.1rem;margin:0 0 8px">Search member</h2>
+    <p class="muted" style="margin:0 0 8px">Enter any combination of member ID, first name, and last name. A scanned QR link is accepted in the Member ID field.</p>
+    <label for="userId">Member ID or QR link</label>
+    <input id="userId" placeholder="Enter ID or scan/paste QR link" autocomplete="off">
+    <label for="searchFirstName">First name</label>
+    <input id="searchFirstName" placeholder="Enter first name" autocomplete="off">
+    <label for="searchLastName">Last name</label>
+    <input id="searchLastName" placeholder="Enter last name" autocomplete="off">
+    <button class="primary" onclick="searchMember()">Search member</button>
+    <div id="searchResults" aria-live="polite"></div>
     <div id="message" aria-live="polite"></div>
     <div id="memberCard" style="display:none">
       <div class="member-grid" id="memberFields"></div>
@@ -141,59 +137,82 @@
     $('message').style.display = 'block';
   }
 
-  function startScanner() {
-    if (!window.Html5Qrcode) {
-      showMessage('QR scanner library did not load. You can enter the User ID manually.', 'bad');
+  function extractMemberId(value) {
+    const text = String(value || '').trim();
+    if (!text) return '';
+    try {
+      const parsed = new URL(text);
+      const memberId = parsed.searchParams.get('member');
+      if (memberId) return memberId.trim();
+    } catch (e) {
+      // Plain member ID rather than a URL.
+    }
+    const match = text.match(/[?&]member=([^&#]+)/i);
+    if (match) {
+      try { return decodeURIComponent(match[1]).trim(); } catch (e) { return match[1].trim(); }
+    }
+    return text;
+  }
+
+  function searchMember() {
+    const id = extractMemberId($('userId').value);
+    const first = $('searchFirstName').value.trim();
+    const last = $('searchLastName').value.trim();
+    if (!id && !first && !last) {
+      showMessage('Enter a member ID, first name, or last name.', 'bad');
       return;
     }
-    if (!scanner) scanner = new Html5Qrcode('reader');
-    $('startScan').style.display = 'none';
-    $('stopScan').style.display = 'block';
-    scanner.start({ facingMode: 'environment' }, { fps: 10, qrbox: { width: 230, height: 230 } },
-      decodedText => {
-        $('userId').value = decodedText.trim();
-        stopScanner();
-        lookupMember();
-      },
-      () => {}
-    ).catch(err => {
-      $('startScan').style.display = 'block';
-      $('stopScan').style.display = 'none';
-      showMessage('Unable to start camera. Check browser camera permission or enter the User ID manually.', 'bad');
-    });
-  }
-
-  function stopScanner() {
-    if (scanner && scanner.isScanning) {
-      scanner.stop().then(() => {
-        $('startScan').style.display = 'block';
-        $('stopScan').style.display = 'none';
-      }).catch(() => {
-        $('startScan').style.display = 'block';
-        $('stopScan').style.display = 'none';
-      });
-    } else {
-      $('startScan').style.display = 'block';
-      $('stopScan').style.display = 'none';
-    }
-  }
-
-  function lookupMember() {
-    const id = $('userId').value.trim();
-    if (!id) { showMessage('Scan or enter a member User ID first.', 'bad'); return; }
+    if (id) $('userId').value = id;
     $('memberCard').style.display = 'none';
-    showMessage('Looking up member…', 'info');
-    google.script.run.withSuccessHandler(member => {
-      if (!member) {
-        currentMember = null;
-        showMessage('No member found for User ID: ' + id, 'bad');
+    currentMember = null;
+    $('searchResults').textContent = 'Searching…';
+    showMessage('Searching members…', 'info');
+    google.script.run.withSuccessHandler(members => {
+      const results = $('searchResults');
+      results.innerHTML = '';
+      if (!members.length) {
+        results.textContent = 'No matching members found.';
+        showMessage('No matching members found.', 'bad');
         return;
       }
-      currentMember = member;
-      renderMember(member);
-      showMessage(member.statusMessage, member.active ? 'ok' : 'bad');
-      refreshSummary();
-    }).withFailureHandler(err => showMessage(err.message || String(err), 'bad')).getMember(id);
+      if (members.length === 1) {
+        selectMember(members[0]);
+        return;
+      }
+      const note = document.createElement('p');
+      note.className = 'muted';
+      note.textContent = 'Select the correct member from the matching results.';
+      results.appendChild(note);
+      members.forEach(member => {
+        const item = document.createElement('div');
+        item.className = 'recent-row';
+        const info = document.createElement('span');
+        info.textContent = [member.firstName, member.lastName].filter(Boolean).join(' ') +
+          ' · ' + member.membershipStatus + ' · ID: ' + member.userId;
+        const choose = document.createElement('button');
+        choose.className = 'secondary';
+        choose.style.width = 'auto';
+        choose.style.marginTop = '0';
+        choose.textContent = 'Select';
+        choose.onclick = () => selectMember(member);
+        item.append(info, choose);
+        results.appendChild(item);
+      });
+      showMessage(members.length + ' matching members found.', 'info');
+    }).withFailureHandler(err => {
+      $('searchResults').textContent = err.message || String(err);
+      showMessage(err.message || String(err), 'bad');
+    }).searchMembers(id, first, last);
+  }
+
+  function selectMember(member) {
+    $('searchResults').innerHTML = '';
+    $('userId').value = member.userId || '';
+    currentMember = member;
+    renderMember(member);
+    showMessage(member.statusMessage, member.active ? 'ok' : 'bad');
+    refreshSummary();
+    if (member.active) $('memberCard').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   }
 
   function renderMember(m) {
@@ -228,8 +247,8 @@
 
   function submitCheckIn() {
     if (!currentMember || !currentMember.active) { showMessage('Look up an active member before checking in.', 'bad'); return; }
-    const eventName = $('eventName').value.trim();
-    if (!eventName) { showMessage('Enter the event name first.', 'bad'); return; }
+    const eventName = $('activeEventTitle').textContent.trim();
+    if (!eventName || eventName === 'Loading active event…' || eventName === 'No active event') { showMessage('No active event is available.', 'bad'); return; }
     const count = Math.max(1, parseInt($('headCount').value, 10) || 1);
     showMessage('Recording check-in…', 'info');
     google.script.run.withSuccessHandler(result => {
@@ -247,8 +266,8 @@
   }
 
   function refreshSummary() {
-    const eventName = $('eventName').value.trim();
-    if (!eventName) return;
+    const eventName = $('activeEventTitle').textContent.trim();
+    if (!eventName || eventName === 'Loading active event…' || eventName === 'No active event') return;
     google.script.run.withSuccessHandler(renderSummary)
       .withFailureHandler(err => { $('recent').textContent = err.message || String(err); })
       .getEventSummary(eventName);
@@ -293,54 +312,6 @@
       row.append(left, right);
       recent.appendChild(row);
     });
-  }
-
-  function searchByName() {
-    const first = $('searchFirstName').value.trim();
-    const last = $('searchLastName').value.trim();
-    if (!first && !last) {
-      $('searchResults').textContent = 'Enter a first name, last name, or both.';
-      return;
-    }
-    $('searchResults').textContent = 'Searching…';
-    google.script.run.withSuccessHandler(members => {
-      const results = $('searchResults');
-      results.innerHTML = '';
-      if (!members.length) {
-        results.textContent = 'No matching members found.';
-        return;
-      }
-      members.forEach(member => {
-        const item = document.createElement('div');
-        item.className = 'recent-row';
-        const info = document.createElement('span');
-        info.textContent = [member.firstName, member.lastName].filter(Boolean).join(' ') +
-          ' · ' + member.membershipStatus + ' · ID: ' + member.userId;
-        const choose = document.createElement('button');
-        choose.className = 'secondary';
-        choose.style.width = 'auto';
-        choose.style.marginTop = '0';
-        choose.textContent = 'Select';
-        choose.onclick = () => {
-          $('userId').value = member.userId;
-          currentMember = member;
-          renderMember(member);
-          showMessage(member.statusMessage, member.active ? 'ok' : 'bad');
-          refreshSummary();
-          $('memberCard').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-        };
-        item.append(info, choose);
-        results.appendChild(item);
-      });
-      if (members.length === 50) {
-        const note = document.createElement('p');
-        note.className = 'muted';
-        note.textContent = 'Showing the first 50 matches. Add more letters to narrow the search.';
-        results.appendChild(note);
-      }
-    }).withFailureHandler(err => {
-      $('searchResults').textContent = err.message || String(err);
-    }).searchMembers(first, last);
   }
 
   let adminSessionToken = '';
@@ -410,12 +381,12 @@
 
   function loadAppConfig() {
     google.script.run.withSuccessHandler(config => {
-      $('eventName').value = config.eventName || '';
+      $('activeEventTitle').textContent = config.eventName || 'No active event';
       $('volunteerView').classList.toggle('hidden', !config.hasActiveEvent);
       $('noEventNotice').classList.toggle('hidden', Boolean(config.hasActiveEvent));
       if (config.hasActiveEvent) {
         refreshSummary();
-        $('searchFirstName').focus();
+        $('userId').focus();
       } else {
         $('checkIns').textContent = '0';
         $('people').textContent = '0';
@@ -423,28 +394,20 @@
         $('recent').textContent = 'No event is published yet.';
       }
     }).withFailureHandler(err => {
-      $('eventName').value = '';
+      $('activeEventTitle').textContent = 'Unable to load active event';
       showMessage(err.message || String(err), 'bad');
     }).getAppConfig();
   }
 
-  // Press Enter to run the relevant lookup/search without clicking a button.
-  $('userId').addEventListener('keydown', event => {
-    if (event.key === 'Enter') {
-      event.preventDefault();
-      lookupMember();
-    }
-  });
-  ['searchFirstName', 'searchLastName'].forEach(id => {
+  // Enter in any member field runs the combined search.
+  ['userId', 'searchFirstName', 'searchLastName'].forEach(id => {
     $(id).addEventListener('keydown', event => {
       if (event.key === 'Enter') {
         event.preventDefault();
-        searchByName();
+        searchMember();
       }
     });
   });
-
-  $('eventName').addEventListener('change', refreshSummary);
   $('attendanceSearch').addEventListener('input', renderAttendanceList);
   window.addEventListener('load', loadAppConfig);
 </script>
