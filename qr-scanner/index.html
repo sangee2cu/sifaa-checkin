@@ -124,8 +124,12 @@
       window.parent.postMessage({ type: 'SIFAA_QR_MEMBER', memberId: id }, '*');
       status('Member ID sent to the embedded check-in screen.', 'ok');
     } else if (window.opener && !window.opener.closed) {
+      // Send the ID to the check-in tab, then close this scanner tab so the browser
+      // returns the volunteer to the search page. Browsers only allow this reliably
+      // when this tab was opened by the check-in page's Open QR scanner button.
       window.opener.postMessage({ type: 'SIFAA_QR_MEMBER', memberId: id }, '*');
-      status('Member ID sent to the check-in tab. You can return to that tab now.', 'ok');
+      status('Member ID sent. Returning to SIFAA check-in…', 'ok');
+      window.setTimeout(() => window.close(), 250);
     } else {
       status('The check-in app could not be reached. Copy the ID below and paste it into the check-in app.', 'bad');
     }
