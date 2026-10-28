@@ -9,9 +9,10 @@
     :root { color-scheme: light; --navy:#17324d; --gold:#d5a33a; --bg:#f5f7fa; --border:#d8dee8; }
     * { box-sizing: border-box; }
     body { margin:0; font-family:Arial, sans-serif; color:#17212b; background:var(--bg); }
-    header { background:var(--navy); color:white; padding:18px 16px; text-align:center; }
+    header { background:var(--navy); color:white; padding:18px 56px 18px 16px; text-align:center; position:relative; }
     header h1 { font-size:1.35rem; margin:0 0 5px; }
-    header p { margin:0; font-size:.92rem; opacity:.9; }
+    header p { margin:0; font-size:.98rem; opacity:.95; }
+    .admin-toggle { position:absolute; right:12px; top:12px; width:34px; height:34px; padding:0; margin:0; border-radius:50%; background:transparent; color:white; border:1px solid #ffffff80; font-size:1.05rem; line-height:1; }
     main { max-width:620px; margin:18px auto; padding:0 14px 28px; }
     .card { background:white; border:1px solid var(--border); border-radius:14px; padding:16px; margin-bottom:14px; box-shadow:0 2px 8px #1020300a; }
     label { display:block; font-size:.9rem; font-weight:700; margin:12px 0 6px; }
@@ -54,8 +55,8 @@
 <body>
 <header>
   <h1>SIFAA Event Check-in</h1>
-  <p>Search members and check in for the active event</p>
-  <button class="admin-toggle" type="button" onclick="toggleAdminPanel()">Admin setup</button>
+  <p id="activeEventTitle">Loading event…</p>
+  <button class="admin-toggle" type="button" onclick="toggleAdminPanel()" aria-label="Admin login" title="Admin login">⚙</button>
 </header>
 <main>
   <section id="adminPanel" class="card admin-panel hidden">
@@ -79,14 +80,9 @@
   </section>
   <div id="noEventNotice" class="card hidden">
     <strong>No event is published yet.</strong>
-    <p class="muted">Ask a SIFAA administrator to publish the event spreadsheet using Admin setup.</p>
+    <p class="muted">Ask a SIFAA administrator to publish the event spreadsheet using the admin icon.</p>
   </div>
   <div id="volunteerView">
-  <section class="card" style="text-align:center">
-    <h2 id="activeEventTitle" style="font-size:1.4rem;margin:0">Loading active event…</h2>
-    <p class="muted" style="margin-bottom:0">SIFAA event check-in</p>
-  </section>
-
   <section class="card">
     <h2 style="font-size:1.1rem;margin:0 0 12px">Check in a member</h2>
     <div class="option-card">
@@ -298,7 +294,7 @@
   function submitCheckIn() {
     if (!currentMember || !currentMember.active) { showMessage('Look up an active member before checking in.', 'bad'); return; }
     const eventName = $('activeEventTitle').textContent.trim();
-    if (!eventName || eventName === 'Loading active event…' || eventName === 'No active event') { showMessage('No active event is available.', 'bad'); return; }
+    if (!eventName || eventName === 'Loading event…' || eventName === 'No active event') { showMessage('No active event is available.', 'bad'); return; }
     const count = Math.max(1, parseInt($('headCount').value, 10) || 1);
     showMessage('Recording check-in…', 'info');
     google.script.run.withSuccessHandler(result => {
@@ -320,7 +316,7 @@
 
   function refreshSummary() {
     const eventName = $('activeEventTitle').textContent.trim();
-    if (!eventName || eventName === 'Loading active event…' || eventName === 'No active event') return;
+    if (!eventName || eventName === 'Loading event…' || eventName === 'No active event') return;
     google.script.run.withSuccessHandler(renderSummary)
       .withFailureHandler(err => { $('recent').textContent = err.message || String(err); })
       .getEventSummary(eventName);
