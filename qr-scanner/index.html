@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#17324d">
+  <title>SIFAA QR Scanner</title>
+  <style>
+    :root { color-scheme: light; --navy:#17324d; --gold:#d5a33a; --bg:#f5f7fa; --border:#d8dee8; }
+    * { box-sizing: border-box; }
+    body { margin:0; padding:16px; background:var(--bg); color:#17212b; font-family:Arial,sans-serif; }
+    main { max-width:560px; margin:0 auto; }
+    header { background:var(--navy); color:white; border-radius:14px; padding:18px; text-align:center; }
+    h1 { font-size:1.35rem; margin:0 0 6px; }
+    p { line-height:1.45; }
+    .card { margin-top:14px; padding:16px; background:white; border:1px solid var(--border); border-radius:14px; }
+    button, a.button { display:block; width:100%; border:0; border-radius:9px; padding:13px 15px; margin-top:10px; font-size:1rem; font-weight:700; text-align:center; text-decoration:none; cursor:pointer; }
+    .primary { background:var(--navy); color:white; }
+    .secondary { background:#e8edf3; color:var(--navy); }
+    input { width:100%; padding:12px; font-size:1rem; border:1px solid #b8c3d1; border-radius:8px; }
+    #reader { width:100%; overflow:hidden; margin-top:12px; }
+    #status { padding:12px; border-radius:9px; background:#eaf2fc; color:#174b82; overflow-wrap:anywhere; }
+    #status.bad { background:#fff0ed; color:#a12b1c; }
+    #status.ok { background:#e4f6e9; color:#176534; }
+    .muted { color:#647182; font-size:.9rem; }
+    .hidden { display:none !important; }
+  </style>
+</head>
+<body>
+<main>
+  <header><h1>SIFAA QR Scanner</h1><p style="margin:0">Scan a member QR code to return the member ID to event check-in.</p></header>
+  <section class="card">
+    <div id="status" role="status" aria-live="polite">Tap Start camera and allow camera access when your browser asks.</div>
+    <button id="start" class="primary" type="button">Start camera</button>
+    <button id="stop" class="secondary hidden" type="button">Stop camera</button>
+    <div id="reader" class="hidden"></div>
+    <div id="resultPanel" class="hidden">
+      <label for="memberId"><strong>Scanned member ID</strong></label>
+      <input id="memberId" autocomplete="off">
+      <button id="send" class="primary" type="button">Send ID to check-in app</button>
+      <button id="copy" class="secondary" type="button">Copy member ID</button>
+      <p class="muted">If the check-in app does not update automatically, copy this ID, return to the check-in tab, and paste it into the Member ID field.</p>
+    </div>
+    <a class="button secondary" id="returnLink" href="https://script.google.com/" target="_blank" rel="noopener">Open Google Apps Script</a>
+  </section>
+  <p class="muted">Camera scanning requires this page to be opened over HTTPS. You can also use manual member search in the SIFAA check-in app.</p>
+</main>
+<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+<script>
+  let scanner = null;
+  let starting = false;
+  let lastMemberId = '';
+  const $ = id => document.getElementById(id);
+  function status(message, type) {
+    $('status').textContent = message;
+    $('status').className = type || '';
+  }
+  function extractMemberId(value) {
+    const text = String(value || '').trim();
+    if (!text) return '';
+    try {
+      const parsed = new URL(text);
+      const id = parsed.searchParams.get('member');
+      if (id) return id.trim();
+    } catch (e) {}
+    const match = text.match(/[?&]member=([^&#]+)/i);
+    if (match) {
+      try { return decodeURIComponent(match[1]).trim(); } catch (e) { return match[1].trim(); }
+    }
+    return text;
+  }
+  async function stopCamera() {
+    const active = scanner;
+    scanner = null;
+    if (active) {
+      try { if (active.isScanning) await active.stop(); } catch (e) {}
+      try { await active.clear(); } catch (e) {}
+    }
+    $('reader').classList.add('hidden');
+    $('reader').innerHTML = '';
+    $('stop').classList.add('hidden');
+    $('start').classList.remove('hidden');
+    $('start').disabled = false;
+  }
+  async function startCamera() {
+    if (starting || scanner) return;
+    if (!window.Html5Qrcode) {
+      status('The QR scanner library did not load. Check your internet connection or use manual search.', 'bad');
+      return;
+    }
+    starting = true;
+    $('start').disabled = true;
+    $('reader').classList.remove('hidden');
+    $('stop').classList.remove('hidden');
+    try {
+      scanner = new Html5Qrcode('reader');
+      await scanner.start({ facingMode: 'environment' },
+        { fps: 10, qrbox: { width: 240, height: 240 }, aspectRatio: 1.0 },
+        async decoded => {
+          if (lastMemberId) return;
+          const id = extractMemberId(decoded);
+          if (!id) { status('No member ID was found in that QR code. Try again.', 'bad'); return; }
+          lastMemberId = id;
+          $('memberId').value = id;
+          $('resultPanel').classList.remove('hidden');
+          await stopCamera();
+          status('QR code scanned. Send the ID back to the check-in app.', 'ok');
+          sendToOpener();
+        }, () => {});
+      status('Camera is ready. Point it at the member QR code.');
+    } catch (err) {
+      const message = err && err.message ? err.message : String(err);
+      await stopCamera();
+      status('Camera could not start: ' + message + ' Check this site’s camera permission and open this page directly in Safari or Chrome.', 'bad');
+    } finally {
+      starting = false;
+      $('start').disabled = false;
+    }
+  }
+  function sendToOpener() {
+    const id = extractMemberId($('memberId').value);
+    if (!id) { status('Scan a QR code first.', 'bad'); return; }
+    if (window.opener && !window.opener.closed) {
+      window.opener.postMessage({ type: 'SIFAA_QR_MEMBER', memberId: id }, '*');
+      status('Member ID sent to the check-in tab. You can return to that tab now.', 'ok');
+    } else {
+      status('The check-in tab could not be reached. Copy the ID below and paste it into the check-in app.', 'bad');
+    }
+  }
+  $('start').addEventListener('click', startCamera);
+  $('stop').addEventListener('click', stopCamera);
+  $('send').addEventListener('click', sendToOpener);
+  $('copy').addEventListener('click', async () => {
+    try {
+      await navigator.clipboard.writeText(extractMemberId($('memberId').value));
+      status('Member ID copied. Return to the check-in app and paste it into Member ID.', 'ok');
+    } catch (e) {
+      $('memberId').focus(); $('memberId').select();
+      status('Select and copy the member ID, then paste it into the check-in app.', 'bad');
+    }
+  });
+  // If the scanner was opened by the check-in app, offer a direct return action.
+  if (document.referrer && document.referrer.includes('script.google.com')) {
+    $('returnLink').href = document.referrer;
+    $('returnLink').textContent = 'Return to SIFAA check-in';
+  }
+  window.addEventListener('pagehide', () => { if (scanner && scanner.isScanning) scanner.stop().catch(() => {}); });
+</script>
+</body>
+</html>
