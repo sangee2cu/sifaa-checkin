@@ -23,6 +23,20 @@ The app also recognizes optional columns `Email`, `Phone`, `Membership level`, a
 6. Approve the Apps Script permissions when prompted, including spreadsheet access.
 7. Copy the deployed web app URL and share it with approved volunteers. The app opens directly to the volunteer check-in view; use **Admin setup** to sign in and publish the next event.
 
+## Standalone QR scanner setup (required for camera scanning)
+
+The Apps Script HTML service runs inside a sandboxed frame, which can prevent browser camera access even when device permissions are enabled. The QR scanner therefore runs as a separate HTTPS GitHub Pages site.
+
+1. In this repository, open **Settings → Pages**.
+2. Under **Build and deployment**, choose **Deploy from a branch**.
+3. Select branch **main** and folder **/ (root)**, then click **Save**. If Pages is already configured, keep the existing configuration only if it publishes the repository-root `qr-scanner/` folder.
+4. Wait until GitHub Pages reports that the site is published. The scanner page should be available at: https://sangee2cu.github.io/sifaa-checkin/qr-scanner/
+5. Copy the latest `apps-script/Index.html` from this repository into the Apps Script editor, save, then deploy a **new version** of the web app.
+6. Open the deployed SIFAA check-in app and click **Open QR scanner**. Allow pop-ups if prompted. In the scanner tab, click **Start camera** and allow camera permission.
+7. After scanning, the member ID should be sent to the check-in tab and searched automatically. If automatic return does not work, use **Copy member ID** in the scanner and paste it into the Member ID field.
+
+Camera access requires the scanner to be served over HTTPS and the browser to grant permission. The app's manual member search remains available if scanning is unavailable.
+
 ## Event workflow
 
 1. Administrator opens the app and selects **Admin setup**.
