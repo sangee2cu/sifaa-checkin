@@ -120,11 +120,14 @@
   function sendToOpener() {
     const id = extractMemberId($('memberId').value);
     if (!id) { status('Scan a QR code first.', 'bad'); return; }
-    if (window.opener && !window.opener.closed) {
+    if (window.parent && window.parent !== window) {
+      window.parent.postMessage({ type: 'SIFAA_QR_MEMBER', memberId: id }, '*');
+      status('Member ID sent to the embedded check-in screen.', 'ok');
+    } else if (window.opener && !window.opener.closed) {
       window.opener.postMessage({ type: 'SIFAA_QR_MEMBER', memberId: id }, '*');
       status('Member ID sent to the check-in tab. You can return to that tab now.', 'ok');
     } else {
-      status('The check-in tab could not be reached. Copy the ID below and paste it into the check-in app.', 'bad');
+      status('The check-in app could not be reached. Copy the ID below and paste it into the check-in app.', 'bad');
     }
   }
   $('start').addEventListener('click', startCamera);
