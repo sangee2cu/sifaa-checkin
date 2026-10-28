@@ -41,7 +41,7 @@
       <button id="copy" class="secondary" type="button">Copy member ID</button>
       <p class="muted">If the check-in app does not update automatically, copy this ID, return to the check-in tab, and paste it into the Member ID field.</p>
     </div>
-    <a class="button secondary" id="returnLink" href="https://script.google.com/" target="_blank" rel="noopener">Open Google Apps Script</a>
+    <a class="button secondary hidden" id="returnLink" href="#" target="_blank" rel="noopener">Return to SIFAA check-in</a>
   </section>
   <p class="muted">Camera scanning requires this page to be opened over HTTPS. You can also use manual member search in the SIFAA check-in app.</p>
 </main>
@@ -142,6 +142,7 @@
   // If the scanner was opened by the check-in app, offer a direct return action.
   if (document.referrer && document.referrer.includes('script.google.com')) {
     $('returnLink').href = document.referrer;
+    $('returnLink').classList.remove('hidden');
     $('returnLink').textContent = 'Return to SIFAA check-in';
   }
   window.addEventListener('pagehide', () => { if (scanner && scanner.isScanning) scanner.stop().catch(() => {}); });
