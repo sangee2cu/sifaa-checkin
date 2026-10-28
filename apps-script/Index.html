@@ -91,11 +91,9 @@
     <h2 style="font-size:1.1rem;margin:0 0 12px">Check in a member</h2>
     <div class="option-card">
       <h3 style="margin:0 0 6px;font-size:1rem">Option 1: Scan QR code</h3>
-      <p class="muted" style="margin:0 0 8px">Scan the QR code here. The camera view will open inside this check-in screen.</p>
-      <button id="startScannerButton" class="primary" type="button" onclick="showEmbeddedScanner()">Open camera here</button>
-      <button id="stopScannerButton" class="secondary hidden" type="button" onclick="hideEmbeddedScanner()">Close camera</button>
-      <iframe id="qrScannerFrame" class="hidden" title="SIFAA QR camera scanner" src="about:blank" allow="camera https://sangee2cu.github.io; autoplay; encrypted-media" referrerpolicy="strict-origin-when-cross-origin" style="display:block;width:100%;height:510px;border:0;border-radius:10px;margin-top:12px;background:#f5f7fa"></iframe>
-      <p class="muted" style="margin:8px 0 0">If your browser blocks camera access inside Google Apps Script, manual member search is still available below.</p>
+      <p class="muted" style="margin:0 0 8px">Open the camera scanner in a separate browser tab. The same scanner tab is reused for the event.</p>
+      <button id="startScannerButton" class="primary" type="button" onclick="openScannerTab()">Open QR scanner</button>
+      <p class="muted" style="margin:8px 0 0">After scanning, the member ID is sent back to this page for automatic search when the browser allows it. If needed, return to this tab manually.</p>
     </div>
     <div class="option-divider"><span>OR</span></div>
     <div class="option-card">
@@ -152,23 +150,17 @@
     $('message').style.display = 'block';
   }
 
-  function showEmbeddedScanner() {
-    const frame = $('qrScannerFrame');
-    $('startScannerButton').classList.add('hidden');
-    $('stopScannerButton').classList.remove('hidden');
-    frame.classList.remove('hidden');
-    if (frame.src === 'about:blank' || !frame.src.startsWith(QR_SCANNER_URL)) {
-      frame.src = QR_SCANNER_URL + '?embedded=1';
-    }
-    showMessage('Opening the camera inside this page. If the browser blocks camera access in the embedded frame, use manual search.', 'info');
-  }
+  let scannerWindow = null;
 
-  function hideEmbeddedScanner() {
-    const frame = $('qrScannerFrame');
-    frame.src = 'about:blank';
-    frame.classList.add('hidden');
-    $('stopScannerButton').classList.add('hidden');
-    $('startScannerButton').classList.remove('hidden');
+  function openScannerTab() {
+    // A stable window name asks the browser to reuse the scanner tab for later scans.
+    scannerWindow = window.open(QR_SCANNER_URL, 'SIFAAQRScanner');
+    if (!scannerWindow) {
+      showMessage('The browser blocked the scanner tab. Allow pop-ups for this check-in page, then try again.', 'bad');
+      return;
+    }
+    scannerWindow.focus();
+    showMessage('QR scanner opened. After scanning, this page will search the member ID automatically when the browser permits tab communication.', 'info');
   }
 
   // Accept member IDs only from the scanner hosted on this repository's GitHub Pages site.
