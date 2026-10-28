@@ -110,6 +110,7 @@
     <div id="message" aria-live="polite"></div>
     <div id="memberCard" style="display:none">
       <div class="member-grid" id="memberFields"></div>
+      <div id="checkInControls">
       <label>Head count (including member)</label>
       <input id="headCount" type="hidden" value="1">
       <div class="head-count-options" role="group" aria-label="Head count including member">
@@ -120,7 +121,8 @@
         <button type="button" class="count-button" data-count="5" aria-pressed="false" onclick="setHeadCount(5)">5</button>
         <button type="button" class="count-button" data-count="6" aria-pressed="false" onclick="setHeadCount(6)">6</button>
       </div>
-      <button class="primary" onclick="submitCheckIn()">Confirm check-in</button>
+      <button id="confirmCheckInButton" class="primary" onclick="submitCheckIn()">Confirm check-in</button>
+      </div>
     </div>
   </section>
 
@@ -148,6 +150,16 @@
     $('message').className = 'status ' + (type || 'info');
     $('message').textContent = text;
     $('message').style.display = 'block';
+  }
+
+  function clearSearchForm() {
+    $('userId').value = '';
+    $('searchFirstName').value = '';
+    $('searchLastName').value = '';
+    $('searchResults').innerHTML = '';
+    $('memberCard').style.display = 'none';
+    currentMember = null;
+    setHeadCount(1);
   }
 
   let scannerWindow = null;
@@ -197,6 +209,7 @@
     const first = $('searchFirstName').value.trim();
     const last = $('searchLastName').value.trim();
     if (!id && !first && !last) {
+      clearSearchForm();
       showMessage('Enter a member ID, first name, or last name.', 'bad');
       return;
     }
@@ -209,8 +222,8 @@
       const results = $('searchResults');
       results.innerHTML = '';
       if (!members.length) {
-        results.textContent = 'No matching members found.';
-        showMessage('No matching members found.', 'bad');
+        clearSearchForm();
+        showMessage('No matching members found. Search fields have been cleared.', 'bad');
         return;
       }
       if (members.length === 1) {
@@ -238,8 +251,9 @@
       });
       showMessage(members.length + ' matching members found.', 'info');
     }).withFailureHandler(err => {
-      $('searchResults').textContent = err.message || String(err);
-      showMessage(err.message || String(err), 'bad');
+      const message = err.message || String(err);
+      clearSearchForm();
+      showMessage(message + ' Search fields have been cleared.', 'bad');
     }).searchMembers(id, first, last);
   }
 
@@ -270,7 +284,9 @@
       box.append(small, strong);
       $('memberFields').appendChild(box);
     });
-    $('memberCard').style.display = m.active ? 'block' : 'none';
+    // Always show member details, including expired/inactive memberships.
+    $('memberCard').style.display = 'block';
+    $('checkInControls').classList.toggle('hidden', !m.active);
   }
 
   function setHeadCount(count) {
@@ -299,8 +315,11 @@
       currentMember = null;
       setHeadCount(1);
       renderSummary(result.summary);
-    }).withFailureHandler(err => showMessage(err.message || String(err), 'bad'))
-      .checkIn(currentMember.userId, eventName, count);
+    }).withFailureHandler(err => {
+      const message = err.message || String(err);
+      clearSearchForm();
+      showMessage(message + ' Search fields have been cleared.', 'bad');
+    }).checkIn(currentMember.userId, eventName, count);
   }
 
   function refreshSummary() {
