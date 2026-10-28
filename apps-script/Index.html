@@ -6,14 +6,12 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>SIFAA Event Check-in</title>
   <style>
-    :root { color-scheme: light; --navy:#7b3328; --gold:#d8b78a; --bg:#f7f0e5; --border:#e2d1bd; --sandal:#efe0ca; --sandal-deep:#e5cfb0; --text:#34251f; }
+    :root { color-scheme: light; --navy:#8f1e25; --gold:#d8b78a; --bg:#f7f0e5; --border:#e2d1bd; --sandal:#efe0ca; --sandal-deep:#e5cfb0; --text:#34251f; }
     * { box-sizing: border-box; }
     body { margin:0; font-family:Arial, sans-serif; color:var(--text); background:var(--bg); }
-    header { background:var(--navy); color:white; padding:18px 56px 18px 120px; text-align:center; position:relative; min-height:100px; }
-    .header-logo { position:absolute; left:14px; top:50%; transform:translateY(-50%); width:82px; height:82px; object-fit:contain; border-radius:50%; }
-    header h1 { font-size:1.35rem; margin:0 0 5px; }
-    header p { margin:0; font-size:.98rem; opacity:.95; }
-    .admin-toggle { position:absolute; right:12px; top:12px; width:34px; height:34px; padding:0; margin:0; border-radius:50%; background:transparent; color:white; border:1px solid #ffffff80; font-size:1.05rem; line-height:1; }
+    .page-heading { position:relative; max-width:900px; margin:22px auto 8px; padding:8px 54px 8px 14px; text-align:center; }
+    .page-heading h1 { color:var(--navy); font-size:clamp(1.8rem, 5vw, 2.7rem); line-height:1.15; margin:0; font-weight:800; }
+    .admin-toggle { position:absolute; right:12px; top:50%; transform:translateY(-50%); width:36px; height:36px; padding:0; margin:0; border-radius:50%; background:var(--navy); color:white; border:1px solid #ffffff80; font-size:1.05rem; line-height:1; }
     main { max-width:620px; margin:18px auto; padding:0 14px 28px; }
     .card { background:#fffaf3; border:1px solid var(--border); border-radius:14px; padding:16px; margin-bottom:14px; box-shadow:0 2px 8px #1020300a; }
     label { display:block; font-size:.9rem; font-weight:700; margin:12px 0 6px; }
@@ -54,12 +52,11 @@
   </style>
 </head>
 <body>
-<header>
-  <img class="header-logo" src="https://raw.githubusercontent.com/sangee2cu/sifaa-checkin/main/sifaa-logo.png" alt="SIFAA Logo">
-  <h1>SIFAA Event Check-in</h1>
-  <p id="activeEventTitle">Loading event…</p>
+<div class="page-heading">
+  <h1>Event Check In : Flute Jayant</h1>
+  <span id="activeEventTitle" class="hidden">Loading event…</span>
   <button class="admin-toggle" type="button" onclick="toggleAdminPanel()" aria-label="Admin login" title="Admin login">⚙</button>
-</header>
+</div>
 <main>
   <section id="adminPanel" class="card admin-panel hidden">
     <h2 style="font-size:1.1rem;margin:0 0 8px">Administrator setup</h2>
