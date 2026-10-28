@@ -45,6 +45,9 @@
     .admin-panel { border:2px solid var(--gold); }
     .admin-status { margin-top:10px; overflow-wrap:anywhere; }
     .hidden { display:none !important; }
+    .option-card { border:1px solid var(--border); border-radius:10px; padding:14px; }
+    .option-divider { display:flex; align-items:center; gap:12px; margin:14px 0; color:#647182; font-size:.8rem; font-weight:700; }
+    .option-divider::before, .option-divider::after { content:""; height:1px; background:var(--border); flex:1; }
     @media(max-width:420px) { .member-grid { grid-template-columns:1fr; } }
   </style>
 </head>
@@ -79,21 +82,31 @@
     <p class="muted">Ask a SIFAA administrator to publish the event spreadsheet using Admin setup.</p>
   </div>
   <div id="volunteerView">
-  <section class="card">
-    <h2 id="activeEventTitle" style="font-size:1.25rem;margin:0">Loading active event…</h2>
+  <section class="card" style="text-align:center">
+    <h2 id="activeEventTitle" style="font-size:1.4rem;margin:0">Loading active event…</h2>
     <p class="muted" style="margin-bottom:0">SIFAA event check-in</p>
   </section>
 
   <section class="card">
-    <h2 style="font-size:1.1rem;margin:0 0 8px">Search member</h2>
-    <p class="muted" style="margin:0 0 8px">Enter any combination of member ID, first name, and last name. A scanned QR link is accepted in the Member ID field.</p>
-    <label for="userId">Member ID or QR link</label>
-    <input id="userId" placeholder="Enter ID or scan/paste QR link" autocomplete="off">
-    <label for="searchFirstName">First name</label>
-    <input id="searchFirstName" placeholder="Enter first name" autocomplete="off">
-    <label for="searchLastName">Last name</label>
-    <input id="searchLastName" placeholder="Enter last name" autocomplete="off">
-    <button class="primary" onclick="searchMember()">Search member</button>
+    <h2 style="font-size:1.1rem;margin:0 0 12px">Check in a member</h2>
+    <div class="option-card">
+      <h3 style="margin:0 0 6px;font-size:1rem">Option 1: Scan QR code</h3>
+      <p class="muted" style="margin:0 0 8px">Use your device camera to scan the member's QR code. The app will extract the member ID and search automatically.</p>
+      <button id="startScannerButton" class="primary" type="button" onclick="startScanner()">Scan QR code with camera</button>
+      <button id="stopScannerButton" class="secondary hidden" type="button" onclick="stopScanner()">Stop camera</button>
+      <div id="reader" class="hidden" style="margin-top:12px"></div>
+    </div>
+    <div class="option-divider"><span>OR</span></div>
+    <div class="option-card">
+      <h3 style="margin:0 0 6px;font-size:1rem">Option 2: Search by name or member ID</h3>
+      <label for="userId">Member ID</label>
+      <input id="userId" placeholder="Enter member ID" autocomplete="off">
+      <label for="searchFirstName">First name</label>
+      <input id="searchFirstName" placeholder="Enter first name" autocomplete="off">
+      <label for="searchLastName">Last name</label>
+      <input id="searchLastName" placeholder="Enter last name" autocomplete="off">
+      <button class="primary" type="button" onclick="searchMember()">Search member</button>
+    </div>
     <div id="searchResults" aria-live="polite"></div>
     <div id="message" aria-live="polite"></div>
     <div id="memberCard" style="display:none">
@@ -126,8 +139,10 @@
   </div>
   <p class="muted">Use only for authorized SIFAA event check-in. Member data is accessed by the app owner on behalf of volunteers.</p>
 </main>
+<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 <script>
   let scanner = null;
+  let scannerStarting = false;
   let currentMember = null;
   const $ = id => document.getElementById(id);
 
@@ -135,6 +150,60 @@
     $('message').className = 'status ' + (type || 'info');
     $('message').textContent = text;
     $('message').style.display = 'block';
+  }
+
+  async function startScanner() {
+    if (scanner || scannerStarting) return;
+    if (!window.Html5Qrcode) {
+      showMessage('The QR scanner could not load. Please use the manual member search.', 'bad');
+      return;
+    }
+    scannerStarting = true;
+    $('startScannerButton').disabled = true;
+    $('reader').classList.remove('hidden');
+    $('stopScannerButton').classList.remove('hidden');
+    try {
+      scanner = new Html5Qrcode('reader');
+      await scanner.start(
+        { facingMode: 'environment' },
+        { fps: 10, qrbox: { width: 240, height: 240 }, aspectRatio: 1.0 },
+        async decodedText => {
+          const memberId = extractMemberId(decodedText);
+          if (!memberId) {
+            showMessage('Could not find a member ID in that QR code. Try again or search manually.', 'bad');
+            return;
+          }
+          $('userId').value = memberId;
+          await stopScanner();
+          searchMember();
+        },
+        () => {}
+      );
+      showMessage('Camera is ready. Point it at the member QR code.', 'info');
+    } catch (err) {
+      const message = err && err.message ? err.message : String(err);
+      await stopScanner();
+      showMessage('Unable to start the camera. Allow camera access in your browser, or use manual search. ' + message, 'bad');
+    } finally {
+      scannerStarting = false;
+      $('startScannerButton').disabled = false;
+    }
+  }
+
+  async function stopScanner() {
+    const activeScanner = scanner;
+    scanner = null;
+    if (activeScanner) {
+      try {
+        if (activeScanner.isScanning) await activeScanner.stop();
+      } catch (e) {}
+      try { await activeScanner.clear(); } catch (e) {}
+    }
+    $('reader').classList.add('hidden');
+    $('reader').innerHTML = '';
+    $('stopScannerButton').classList.add('hidden');
+    $('startScannerButton').classList.remove('hidden');
+    $('startScannerButton').disabled = false;
   }
 
   function extractMemberId(value) {
